@@ -1,0 +1,132 @@
+# Configurazione Gitpod per l'ambiente di sviluppo NearYou
+image: gitpod/workspace-full
+
+# Porte da esporre
+ports:
+  - port: 8003
+    onOpen: open-preview
+    description: Dashboard Utente
+    visibility: public
+  - port: 8000
+    onOpen: open-preview
+    description: API Gateway
+    visibility: public
+  - port: 8080
+    onOpen: open-browser
+    description: Airflow Web UI
+    visibility: public
+  - port: 3000
+    onOpen: open-browser
+    description: Grafana Dashboard
+    visibility: public
+  - port: 5432
+    onOpen: ignore
+    description: PostgreSQL
+  - port: 9000
+    onOpen: ignore
+    description: ClickHouse
+  - port: 9093
+    onOpen: ignore
+    description: Kafka
+  - port: 1883
+    onOpen: ignore
+    description: MQTT Broker
+  - port: 6379
+    onOpen: ignore
+    description: Redis Cache
+
+# Task di avvio automatico
+tasks:
+  - name: "🚀 Setup & Avvio Automatico"
+    init: |
+      # Crea struttura directory necessarie
+      mkdir -p config/development certs data/osrm logs
+      
+      # Copia configurazione di sviluppo se non esiste
+      if [ ! -f config/development/.env ]; then
+        echo "📝 Creazione file di configurazione..."
+        cp config/development/.env.development config/development/.env
+      fi
+      
+      # Genera certificati SSL per sviluppo
+      echo "🔐 Generazione certificati SSL..."
+      ./scripts/setup/generate_dev_certificates.sh
+      
+      # Installa dipendenze Python
+      echo "🐍 Configurazione ambiente Python..."
+      python -m venv venv
+      source venv/bin/activate
+      pip install --upgrade pip
+      pip install -r requirements-dev.txt
+      
+      # Installa pre-commit hooks
+      pre-commit install
+      
+      # Build immagini Docker
+      echo "🐳 Build immagini Docker..."
+      docker-compose -f docker/docker-compose.dev.yml build
+      
+    command: |
+      # Avvia tutti i servizi
+      echo "🚀 Avvio servizi NearYou..."
+      make start-all
+      
+      # Mostra informazioni utili
+      echo ""
+      echo "✅ NearYou Platform è pronto!"
+      echo ""
+      echo "🔗 URL dei servizi:"
+      echo "   Dashboard Utente: $(gp url 8003)"
+      echo "   API Documentation: $(gp url 8000)/docs"
+      echo "   Grafana Dashboard: $(gp url 3000)"
+      echo "   Airflow: $(gp url 8080)"
+      echo ""
+      echo "📚 Comandi utili:"
+      echo "   make help     - Mostra tutti i comandi disponibili"
+      echo "   make logs     - Visualizza i log"
+      echo "   make test     - Esegue i test"
+      echo "   make status   - Mostra lo stato dei servizi"
+      echo ""
+      
+  - name: "📊 Monitoring"
+    command: |
+      # Attendi che i servizi siano pronti
+      sleep 30
+      
+      # Apri dashboard di monitoring
+      gp preview $(gp url 3000)
+      
+      # Mostra status dei servizi
+      make status
+
+# Estensioni VS Code da installare
+vscode:
+  extensions:
+    - ms-python.python
+    - ms-python.vscode-pylance
+    - ms-azuretools.vscode-docker
+    - ms-vscode.makefile-tools
+    - streetsidesoftware.code-spell-checker
+    - yzhang.markdown-all-in-one
+    - davidanson.vscode-markdownlint
+    - redhat.vscode-yaml
+    - ms-kubernetes-tools.vscode-kubernetes-tools
+    - esbenp.prettier-vscode
+    - dbaeumer.vscode-eslint
+
+# Configurazione GitHub
+github:
+  prebuilds:
+    master: true
+    branches: true
+    pullRequests: true
+    pullRequestsFromForks: false
+    addCheck: true
+    addComment: false
+    addBadge: true
+
+# Variabili d'ambiente per Gitpod
+env:
+  ENVIRONMENT: development
+  PYTHONPATH: /workspace/NearYou/src
+  COMPOSE_PROJECT_NAME: nearyou
