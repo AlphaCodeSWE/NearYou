@@ -1,0 +1,223 @@
+version: '3.9'
+
+services:
+  # App principale
+  app:
+    build:
+      context: ..
+      dockerfile: docker/services/app/Dockerfile.dev
+    volumes:
+      - ..:/workspace:cached
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - ENVIRONMENT=development
+    command: sleep infinity
+    privileged: true
+    networks:
+      - nearyou
+
+  # Database PostgreSQL con PostGIS
+  postgres:
+    image: postgis/postgis:15-3.3
+    container_name: postgres
+    environment:
+      POSTGRES_USER: nearyou
+      POSTGRES_PASSWORD: development
+      POSTGRES_DB: nearyou_shops
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - nearyou
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "nearyou"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ClickHouse
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: clickhouse
+    environment:
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: development
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    networks:
+      - nearyou
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Kafka
+  zookeeper:
+    image: bitnami/zookeeper:latest
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    ports:
+      - "2181:2181"
+    networks:
+      - nearyou
+
+  kafka:
+    image: bitnami/kafka:3.4
+    environment:
+      - KAFKA_ENABLE_KRAFT=false
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=no
+      - KAFKA_CFG_LISTENERS=SSL://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=SSL://kafka:9093
+      - KAFKA_CFG_SSL_KEYSTORE_LOCATION=/bitnami/kafka/config/certs/kafka.keystore.jks
+      - KAFKA_CFG_SSL_KEYSTORE_PASSWORD=developmentpass123
+      - KAFKA_CFG_SSL_KEY_PASSWORD=developmentpass123
+      - KAFKA_CFG_SSL_TRUSTSTORE_LOCATION=/bitnami/kafka/config/certs/kafka.truststore.jks
+      - KAFKA_CFG_SSL_TRUSTSTORE_PASSWORD=developmentpass123
+      - KAFKA_CFG_SSL_CLIENT_AUTH=required
+    volumes:
+      - ../certs:/bitnami/kafka/config/certs
+    ports:
+      - "9093:9093"
+    depends_on:
+      - zookeeper
+    networks:
+      - nearyou
+
+  # Redis Cache
+  redis:
+    image: redis:alpine
+    container_name: redis
+    command: redis-server --requirepass development
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - nearyou
+
+  # OSRM per routing
+  osrm:
+    build:
+      context: ..
+      dockerfile: docker/services/osrm/Dockerfile.dev
+    container_name: osrm
+    ports:
+      - "5000:5000"
+    volumes:
+      - ../data/osrm:/data
+    networks:
+      - nearyou
+    environment:
+      - PBF_URL=https://download.geofabrik.de/europe/italy/nord-ovest-latest.osm.pbf
+
+  # Message Generator
+  message-generator:
+    build:
+      context: ..
+      dockerfile: docker/services/message-generator/Dockerfile.dev
+    container_name: message-generator
+    environment:
+      - ENVIRONMENT=development
+    env_file:
+      - ../config/development/.env
+    ports:
+      - "8001:8001"
+    networks:
+      - nearyou
+    volumes:
+      - ../src:/app/src
+
+  # Dashboard
+  dashboard:
+    build:
+      context: ..
+      dockerfile: docker/services/dashboard/Dockerfile.dev
+    container_name: dashboard
+    environment:
+      - ENVIRONMENT=development
+    env_file:
+      - ../config/development/.env
+    ports:
+      - "8003:8003"
+    networks:
+      - nearyou
+    volumes:
+      - ../src:/app/src
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=grafana-clickhouse-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../infrastructure/monitoring/grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - "3000:3000"
+    networks:
+      - nearyou
+
+  # Airflow
+  airflow-postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow_pgdata:/var/lib/postgresql/data
+    networks:
+      - nearyou
+
+  airflow-webserver:
+    image: apache/airflow:2.7.3
+    depends_on:
+      - airflow-postgres
+    environment:
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
+    volumes:
+      - ../airflow/dags:/opt/airflow/dags
+      - airflow_logs:/opt/airflow/logs
+    ports:
+      - "8080:8080"
+    networks:
+      - nearyou
+    command: webserver
+
+  airflow-scheduler:
+    image: apache/airflow:2.7.3
+    depends_on:
+      - airflow-postgres
+      - airflow-webserver
+    environment:
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+    volumes:
+      - ../airflow/dags:/opt/airflow/dags
+      - airflow_logs:/opt/airflow/logs
+    networks:
+      - nearyou
+    command: scheduler
+
+volumes:
+  postgres_data:
+  clickhouse_data:
+  redis_data:
+  grafana_data:
+  airflow_pgdata:
+  airflow_logs:
+
+networks:
+  nearyou:
+    driver: bridge
