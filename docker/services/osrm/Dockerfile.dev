@@ -1,0 +1,18 @@
+FROM ghcr.io/project-osrm/osrm-backend:v5.27.1
+
+# Installa dipendenze necessarie
+RUN apt-get update && \
+    apt-get install -y curl git ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copia profilo bicicletta
+RUN git clone --depth 1 --branch v5.27.1 https://github.com/Project-OSRM/osrm-backend.git /tmp/osrm && \
+    mkdir -p /opt/profiles && \
+    cp /tmp/osrm/profiles/bicycle.lua /opt/profiles/ && \
+    cp -r /tmp/osrm/profiles/lib /opt/profiles/ && \
+    rm -rf /tmp/osrm
+
+COPY scripts/init_osrm.sh /opt/init_osrm.sh
+RUN chmod +x /opt/init_osrm.sh
+
+ENTRYPOINT ["/opt/init_osrm.sh"]

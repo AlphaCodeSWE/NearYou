@@ -1,0 +1,27 @@
+FROM python:3.10-slim
+
+WORKDIR /workspace
+
+# Installa dipendenze di sistema
+RUN apt-get update && apt-get install -y \
+    gcc \
+    python3-dev \
+    postgresql-client \
+    netcat-traditional \
+    curl \
+    sudo \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copia requirements
+COPY requirements-dev.txt .
+RUN pip install --no-cache-dir -r requirements-dev.txt
+
+# Configura PYTHONPATH
+ENV PYTHONPATH=/workspace/src:/workspace
+
+# Crea utente non-root con sudo
+RUN useradd -m -s /bin/bash developer && \
+    echo "developer ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Default command
+CMD ["sleep", "infinity"]
