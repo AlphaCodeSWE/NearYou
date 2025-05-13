@@ -9,8 +9,8 @@ sys.path.insert(0, '/workspace')  # Percorso alla radice del progetto
 
 try:
     # Tentativo di importazione diretta dalla nuova directory
-    from redis_cache.redis_cache import RedisCache
-    from redis_cache.memory_cache import MemoryCache
+    from src.cache.redis_cache import RedisCache
+    from src.cache.memory_cache import MemoryCache
     logging.info("Moduli di cache importati con successo")
 except ImportError as e:
     logging.warning(f"Errore importazione moduli cache: {e}")
@@ -20,8 +20,8 @@ except ImportError as e:
         import importlib.util
         
         # Percorsi aggiornati alla nuova directory
-        redis_path = '/workspace/redis_cache/redis_cache.py'
-        memory_path = '/workspace/redis_cache/memory_cache.py'
+        redis_path = '/workspace/src/cache/redis_cache.py'
+        memory_path = '/workspace/src/cache/memory_cache.py'
         
         # Importa RedisCache
         spec = importlib.util.spec_from_file_location("redis_cache_module", redis_path)
@@ -152,9 +152,6 @@ def generate_cache_key(user_params: Dict[str, Any], poi_params: Dict[str, Any]) 
     logger.info(f"CACHE_KEY HASH: {hash_key}")
     
     return hash_key
-
-
-
 
 def get_cached_message(user_params: Dict[str, Any], poi_params: Dict[str, Any]) -> Optional[str]:
     """Recupera un messaggio dalla cache se disponibile."""

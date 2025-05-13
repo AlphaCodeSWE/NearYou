@@ -1,0 +1,29 @@
+# File principale docker-compose.yml nella root del progetto
+version: "3.9"
+
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  env_file:
+    - .env
+
+services:
+  # Service per avviare tutti i servizi
+  all-services:
+    image: busybox
+    command: echo "Avvio completo di NearYou. Attendi che tutti i servizi siano pronti."
+    depends_on:
+      - osrm-milano
+      - kafka
+      - clickhouse
+      - postgres
+      - airflow-webserver
+      - message-generator
+      - dashboard-user
+      - grafana
+      - producer
+      - consumer
+
+
+include:
+  - ./deployment/docker/docker-compose.yml
