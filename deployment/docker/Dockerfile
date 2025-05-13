@@ -1,4 +1,4 @@
-# .devcontainer/Dockerfile
+# deployment/docker/Dockerfile
 
 FROM python:3.10-slim
 
@@ -14,10 +14,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copia la cartella del progetto e gli script di inizializzazione
 COPY . /workspace
-COPY .devcontainer/scripts /workspace/.devcontainer/scripts
+COPY deployment/scripts /workspace/deployment/scripts
 
-# Imposta i permessi di esecuzione per tutti gli script .sh in /.devcontainer/scripts
-RUN chmod +x /workspace/.devcontainer/scripts/*.sh
+# Imposta i permessi di esecuzione per tutti gli script .sh in /deployment/scripts
+RUN chmod +x /workspace/deployment/scripts/*.sh
 
 # Espone src/ e workspace nel PYTHONPATH così da importare i moduli (es. configg)
 ENV PYTHONPATH=/workspace/src:/workspace
