@@ -1,0 +1,104 @@
+name: NearYou CD Staging
+
+# Attivazione del workflow
+on:
+  push:
+    branches: [ develop ]  # Attiva su push al branch develop
+  workflow_dispatch:       # Consente attivazione manuale
+
+jobs:
+  deploy-staging:
+    name: Deploy su Staging
+    runs-on: ubuntu-latest
+    environment: staging
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Configura credenziali AWS
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+          
+      - name: Login ad Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      
+      - name: Configura Docker Buildx
+        uses: docker/setup-buildx-action@v2
+        
+      - name: Cache layer Docker
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+      
+      - name: Estrai metadati (tag, etichette)
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{ steps.login-ecr.outputs.registry }}/nearyou
+          tags: |
+            type=ref,event=branch
+            type=sha,format=short
+      
+      - name: Build e push immagine Docker
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./deployment/docker/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new
+          
+      # Sposta cache
+      - name: Sposta cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+      
+      - name: Configura Kustomize
+        uses: imranismail/setup-kustomize@v1
+        with:
+          kustomize-version: "4.5.7"
+      
+      - name: Aggiorna risorse Kubernetes
+        run: |
+          cd deployment/k8s/overlays/staging
+          kustomize edit set image nearyou=${{ steps.meta.outputs.tags }}
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
+          git add .
+          git commit -m "Aggiorna immagine staging a ${{ github.sha }}" || echo "Nessuna modifica da committare"
+          git push
+      
+      - name: Deploy su Kubernetes
+        uses: actions-hub/kubectl@master
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG_STAGING }}
+        with:
+          args: apply -k deployment/k8s/overlays/staging
+          
+      - name: Verifica deployment
+        uses: actions-hub/kubectl@master
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG_STAGING }}
+        with:
+          args: rollout status deployment/nearyou -n nearyou-staging
+          
+      - name: Notifica deployment
+        uses: ravsamhq/notify-slack-action@v2
+        if: always()
+        with:
+          status: ${{ job.status }}
+          notification_title: '{workflow} ha {status_message}'
+          message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}>'
+          footer: '<{run_url}|Visualizza Esecuzione>'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_STAGING }}
