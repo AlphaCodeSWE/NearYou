@@ -1,0 +1,25 @@
+# .gitpod.yml (root del repo)
+
+image: gitpod/workspace-full
+
+tasks:
+  - name: "Load .env and start Docker"
+    command: |
+      if [ -f .env ]; then
+        export $(grep -v '^#' .env | xargs)
+      fi
+      docker-compose -f .devcontainer/docker-compose.yml up -d
+
+ports:
+  - port: 8003
+    onOpen: open-preview       
+  - port: 9093
+    onOpen: open-preview
+  - port: 8080
+    onOpen: open-preview
+  - port: 8081
+    onOpen: open-preview
+  - port: 2181
+    onOpen: ignore
+  - port: 1883
+    onOpen: ignore
