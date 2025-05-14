@@ -14,14 +14,14 @@ ports:
   - port: 8003
     onOpen: open-preview       
   - port: 9093
-    onOpen: open-preview
+    onOpen: ignore
   - port: 8080
-    onOpen: open-preview
+    onOpen: ignore
   - port: 8081
-    onOpen: open-preview
+    onOpen: ignore
   - port: 2181
     onOpen: ignore
   - port: 1883
     onOpen: ignore
-  - port: 9199
+  - port: 9090
     onOpen: ignore
