@@ -1,95 +1,93 @@
-version: '3.9'
+# Esportatori per database e servizi
 
-services:
-  prometheus:
-    image: prom/prometheus:v2.45.0
-    container_name: prometheus
-    volumes:
-      - ./prometheus:/etc/prometheus
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--web.enable-lifecycle'
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter
+    container_name: postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://nearuser:nearypass@postgres-postgis:5432/near_you_shops?sslmode=disable"
     ports:
-      - "9090:9090"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  loki:
-    image: grafana/loki:2.9.1
-    container_name: loki
-    volumes:
-      - ./loki/loki.yml:/etc/loki/local-config.yaml
-      - loki_data:/loki
-    ports:
-      - "3100:3100"
-    restart: unless-stopped
-    command: -config.file=/etc/loki/local-config.yaml
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3100/ready"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  promtail:
-    image: grafana/promtail:2.9.1
-    container_name: promtail
-    volumes:
-      - ./loki/promtail.yml:/etc/promtail/config.yml
-      - /var/log:/var/log
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-    command: -config.file=/etc/promtail/config.yml
+      - "9187:9187"
     restart: unless-stopped
     depends_on:
-      - loki
+      - postgres-postgis
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9187/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  node-exporter:
-    image: prom/node-exporter:v1.6.1
-    container_name: node-exporter
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/rootfs:ro
+  redis-exporter:
+    image: oliver006/redis_exporter
+    container_name: redis-exporter
+    environment:
+      - REDIS_ADDR=redis-cache:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    ports:
+      - "9121:9121"
+    restart: unless-stopped
+    depends_on:
+      - redis-cache
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9121/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  clickhouse-exporter:
+    image: f1yegor/clickhouse-exporter
+    container_name: clickhouse-exporter
+    environment:
+      - CLICKHOUSE_URL=http://clickhouse-server:8123
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
+    ports:
+      - "9116:9116"
+    restart: unless-stopped
+    depends_on:
+      - clickhouse-server
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9116/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter
+    container_name: kafka-exporter
     command:
-      - '--path.procfs=/host/proc'
-      - '--path.rootfs=/rootfs'
-      - '--path.sysfs=/host/sys'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
-    ports:
-      - "9100:9100"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9100/metrics"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.47.1
-    container_name: cadvisor
-    privileged: true
+      - --kafka.server=kafka:9093
+      - --tls.enabled=true
+      - --tls.ca-file=/etc/kafka/certs/ca.crt
+      - --tls.cert-file=/etc/kafka/certs/client_cert.pem
+      - --tls.key-file=/etc/kafka/certs/client_key.pem
     volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:ro
-      - /sys:/sys:ro
-      - /var/lib/docker:/var/lib/docker:ro
-      
+      - ./certs:/etc/kafka/certs:ro
     ports:
-      - "8082:8080"  
+      - "9308:9308"
     restart: unless-stopped
+    depends_on:
+      - kafka
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/healthz"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9308/metrics"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-volumes:
-  prometheus_data:
-  loki_data:
+  airflow-exporter:
+    image: pbweb/airflow-prometheus-exporter
+    container_name: airflow-exporter
+    environment:
+      - AIRFLOW_PROMETHEUS_DEBUG=false
+      - AIRFLOW_URL=http://nearyou-airflow-webserver-1:8080
+      - AIRFLOW_USER=admin
+      - AIRFLOW_PASSWORD=admin
+    ports:
+      - "9112:9112"
+    restart: unless-stopped
+    depends_on:
+      - nearyou-airflow-webserver-1
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9112/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
