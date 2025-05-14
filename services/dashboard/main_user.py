@@ -4,7 +4,7 @@ import os
 import logging
 import asyncio
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
@@ -21,9 +21,6 @@ from .api.models import Token
 
 # Import originali da mantenere
 from .auth import authenticate_user, create_access_token
-
-# Importa utility di monitoring
-from src.utils.monitoring.fastapi_metrics import setup_metrics
 
 # ─── Configura logger ─────────────────────────────────────────────────────
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper())
@@ -219,4 +216,9 @@ async def websocket_positions(websocket: WebSocket):
             manager.disconnect(user_id)
 
 # Configurazione metriche Prometheus
-setup_metrics(app, app_name="dashboard_user")
+try:
+    from .metrics import setup_metrics
+    setup_metrics(app, app_name="dashboard_user")
+    print("Metriche Prometheus configurate con successo")
+except Exception as e:
+    print(f"Errore configurazione metriche: {e}")
