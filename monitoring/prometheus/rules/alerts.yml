@@ -2,13 +2,13 @@ groups:
   - name: nearyou_alerts
     rules:
       - alert: InstanceDown
-        expr: up == 0
+        expr: up == 0 and job != "postgres" and job != "redis" and job != "clickhouse" and job != "kafka"
         for: 1m
         labels:
           severity: critical
         annotations:
-          summary: "Instance {{ $labels.instance }} down"
-          description: "{{ $labels.instance }} of job {{ $labels.job }} has been down for more than 1 minute."
+          summary: "Istanza inattiva"
+          description: "Un'istanza del job {{ $labels.job }} è inattiva da più di 1 minuto."
 
       - alert: HighMemoryUsage
         expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 90
