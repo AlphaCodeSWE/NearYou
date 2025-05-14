@@ -23,7 +23,13 @@ services:
       - grafana
       - producer
       - consumer
+      - prometheus
+      - loki
+      - promtail
+      - node-exporter
+      - cadvisor
 
 
 include:
   - ./deployment/docker/docker-compose.yml
+  - ./monitoring/docker-compose.monitoring.yml 

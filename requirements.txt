@@ -31,3 +31,7 @@ PyJWT
 pydantic
 
 redis==4.5.5    #sistema cache per llm
+
+
+prometheus-client==0.17.1
+prometheus-fastapi-instrumentator==6.1.0

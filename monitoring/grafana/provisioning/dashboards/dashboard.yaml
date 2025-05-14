@@ -1,0 +1,17 @@
+apiVersion: 1
+
+providers:
+  - name: 'NearYou Dashboards'
+    orgId: 1
+    folder: 'NearYou'
+    type: file
+    disableDeletion: true
+    allowUiUpdates: true
+    updateIntervalSeconds: 10
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false
+      patterns:
+        - nearyou_dashboard.json
+        - prometheus_dashboard.json
+        - loki_dashboard.json
