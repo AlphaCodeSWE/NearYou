@@ -102,7 +102,7 @@ services:
       - "9187:9187"
     restart: unless-stopped
     depends_on:
-      - postgres-postgis
+      - postgres
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:9187/metrics"]
       interval: 30s
@@ -137,7 +137,7 @@ services:
       - "9116:9116"
     restart: unless-stopped
     depends_on:
-      - clickhouse-server
+      - clickhouse
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:9116/metrics"]
       interval: 30s
