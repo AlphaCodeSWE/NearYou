@@ -178,7 +178,7 @@ services:
       - "9112:9112"
     restart: unless-stopped
     depends_on:
-      - nearyou-airflow-webserver-1
+      - nearyou-airflow
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:9112/metrics"]
       interval: 30s
