@@ -13,8 +13,8 @@ pytest-mock==3.12.0
 
 # Type stubs per alcune librerie (mypy)
 types-requests
-types-redis==4.6.0.5      
-types-PyJWT==1.7.1.10     
+types-redis   
+types-PyJWT   
 
 # Dipendenze per la documentazione
 sphinx==7.2.6
