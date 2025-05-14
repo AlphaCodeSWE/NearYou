@@ -22,6 +22,9 @@ from .api.models import Token
 # Import originali da mantenere
 from .auth import authenticate_user, create_access_token
 
+# Importa utility di monitoring
+from src.utils.monitoring.fastapi_metrics import setup_metrics
+
 # ─── Configura logger ─────────────────────────────────────────────────────
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper())
 logger = logging.getLogger(__name__)
@@ -214,3 +217,6 @@ async def websocket_positions(websocket: WebSocket):
         logger.error(f"Errore WebSocket: {e}")
         if user_id:
             manager.disconnect(user_id)
+
+# Configurazione metriche Prometheus
+setup_metrics(app, app_name="dashboard_user")

@@ -7,6 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 # Importa il router dalle api
 from .api import api_router
 
+# Importa utility di monitoring
+from src.utils.monitoring.fastapi_metrics import setup_metrics
+
 # Configurazione applicazione
 app = FastAPI(
     title="NearYou Message Generator",
@@ -46,3 +49,6 @@ if os.getenv("ENVIRONMENT") == "production":
 async def root():
     """Reindirizza alla documentazione dell'API."""
     return {"message": "NearYou Message Generator API", "docs": "/docs"}
+
+# Configurazione metriche Prometheus
+setup_metrics(app, app_name="message_generator")
