@@ -153,7 +153,7 @@ services:
       - --tls.cert-file=/etc/kafka/certs/client_cert.pem
       - --tls.key-file=/etc/kafka/certs/client_key.pem
     volumes:
-      - ../certs:/etc/kafka/certs:ro
+      - /workspace/NearYou/certs:/etc/kafka/certs:ro  # Percorso assoluto invece di relativo
     ports:
       - "9308:9308"
     restart: unless-stopped
