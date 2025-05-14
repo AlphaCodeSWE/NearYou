@@ -5,7 +5,7 @@ services:
     image: prom/prometheus:v2.45.0
     container_name: prometheus
     volumes:
-      - ./monitoring/prometheus:/etc/prometheus
+      - ./prometheus:/etc/prometheus
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -27,7 +27,7 @@ services:
     image: grafana/loki:2.9.1
     container_name: loki
     volumes:
-      - ./monitoring/loki/loki.yml:/etc/loki/local-config.yaml
+      - ./loki/loki.yml:/etc/loki/local-config.yaml
       - loki_data:/loki
     ports:
       - "3100:3100"
@@ -44,7 +44,7 @@ services:
     image: grafana/promtail:2.9.1
     container_name: promtail
     volumes:
-      - ./monitoring/loki/promtail.yml:/etc/promtail/config.yml
+      - ./loki/promtail.yml:/etc/promtail/config.yml
       - /var/log:/var/log
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
     command: -config.file=/etc/promtail/config.yml
@@ -153,7 +153,7 @@ services:
       - --tls.cert-file=/etc/kafka/certs/client_cert.pem
       - --tls.key-file=/etc/kafka/certs/client_key.pem
     volumes:
-      - ./certs:/etc/kafka/certs:ro
+      - ../certs:/etc/kafka/certs:ro
     ports:
       - "9308:9308"
     restart: unless-stopped
@@ -181,4 +181,3 @@ services:
 volumes:
   prometheus_data:
   loki_data:
-
