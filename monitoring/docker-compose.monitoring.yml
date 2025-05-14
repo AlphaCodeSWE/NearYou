@@ -21,8 +21,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    networks:
-      - nearyou-network
+   
 
   loki:
     image: grafana/loki:2.9.1
@@ -39,8 +38,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    networks:
-      - nearyou-network
+  
 
   promtail:
     image: grafana/promtail:2.9.1
@@ -53,8 +51,7 @@ services:
     restart: unless-stopped
     depends_on:
       - loki
-    networks:
-      - nearyou-network
+
 
   node-exporter:
     image: prom/node-exporter:v1.6.1
@@ -76,8 +73,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    networks:
-      - nearyou-network
+ 
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.47.1
@@ -96,8 +92,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    networks:
-      - nearyou-network
+  
 
   # Esportatori per database e servizi
   postgres-exporter:
@@ -108,13 +103,12 @@ services:
     ports:
       - "9187:9187"
     restart: unless-stopped
-    networks:
-      - nearyou-network
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:9187/metrics"]
       interval: 30s
       timeout: 10s
       retries: 3
+   
 
   redis-exporter:
     image: oliver006/redis_exporter
@@ -125,13 +119,12 @@ services:
     ports:
       - "9121:9121"
     restart: unless-stopped
-    networks:
-      - nearyou-network
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:9121/metrics"]
       interval: 30s
       timeout: 10s
       retries: 3
+
 
   clickhouse-exporter:
     image: f1yegor/clickhouse-exporter
@@ -143,13 +136,12 @@ services:
     ports:
       - "9116:9116"
     restart: unless-stopped
-    networks:
-      - nearyou-network
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:9116/metrics"]
       interval: 30s
       timeout: 10s
       retries: 3
+    
 
   kafka-exporter:
     image: danielqsj/kafka-exporter
@@ -165,13 +157,12 @@ services:
     ports:
       - "9308:9308"
     restart: unless-stopped
-    networks:
-      - nearyou-network
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:9308/metrics"]
       interval: 30s
       timeout: 10s
       retries: 3
+  
 
   # Prometheus Pushgateway per metriche batch
   pushgateway:
@@ -180,18 +171,14 @@ services:
     ports:
       - "9091:9091"
     restart: unless-stopped
-    networks:
-      - nearyou-network
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:9091/-/healthy"]
       interval: 30s
       timeout: 10s
       retries: 3
+ 
 
 volumes:
   prometheus_data:
   loki_data:
 
-networks:
-  nearyou-network:
-    external: true
