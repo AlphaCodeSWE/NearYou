@@ -166,24 +166,7 @@ services:
       timeout: 10s
       retries: 3
 
-  airflow-exporter:
-    image: pbweb/airflow-prometheus-exporter
-    container_name: airflow-exporter
-    environment:
-      - AIRFLOW_PROMETHEUS_DEBUG=false
-      - AIRFLOW_URL=http://nearyou-airflow-webserver-1:8080
-      - AIRFLOW_USER=admin
-      - AIRFLOW_PASSWORD=admin
-    ports:
-      - "9112:9112"
-    restart: unless-stopped
-    depends_on:
-      - nearyou-airflow
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9112/metrics"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+  
 
 volumes:
   prometheus_data:
