@@ -2,7 +2,7 @@ groups:
   - name: nearyou_alerts
     rules:
       - alert: InstanceDown
-        expr: up == 0 and job != "postgres" and job != "redis" and job != "clickhouse" and job != "kafka"
+        expr: up{job!~"postgres|redis|clickhouse|kafka"} == 0
         for: 1m
         labels:
           severity: critical
