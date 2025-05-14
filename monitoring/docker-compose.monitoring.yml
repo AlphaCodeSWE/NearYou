@@ -146,18 +146,18 @@ services:
   kafka-exporter:
     image: danielqsj/kafka-exporter
     container_name: kafka-exporter
-    entrypoint: 
-      - sh
-      - -c
-      - "/bin/kafka_exporter --kafka.server=kafka:9093 --tls.enabled --tls.insecure-skip-tls-verify"
+    command:
+      - --kafka.server=kafka:9093
+      - --tls.enabled
+      - --sasl.enabled=false
+      - --tls.ca-file=/etc/kafka/certs/ca.crt
+      - --tls.cert-file=/etc/kafka/certs/client_cert.pem
+      - --tls.key-file=/etc/kafka/certs/client_key.pem
+    volumes:
+      - /workspace/NearYou/certs:/etc/kafka/certs:ro
     ports:
       - "9308:9308"
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9308/metrics"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
   
 
   # Prometheus Pushgateway per metriche batch
