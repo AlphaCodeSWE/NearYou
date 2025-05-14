@@ -358,7 +358,7 @@ services:
     container_name: grafana
     volumes:
       - grafana_data:/var/lib/grafana
-      - ../../grafana/provisioning:/etc/grafana/provisioning  
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning  # Percorso corretto
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
@@ -378,19 +378,18 @@ services:
       retries: 5
     restart: unless-stopped
 
-
   init_grafana_dashboard:
     build:
-      context: ../..                      
+      context: .                      
       dockerfile: deployment/docker/Dockerfile  
     volumes:
-      - ../..:/workspace:cached           
+      - .:/workspace:cached           
     command: >
       bash -c "
       echo 'Attendo che Grafana sia pronto...' &&
       sleep 30 &&
       echo 'Esecuzione dello script di assemblaggio dashboard...' &&
-      python3 /workspace/grafana/provisioning/assemble_dashboard.py
+      python3 /workspace/monitoring/grafana/provisioning/assemble_dashboard.py  # Percorso corretto
       "
     environment:
       - PYTHONPATH=/workspace/src:/workspace
