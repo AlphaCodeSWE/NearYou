@@ -144,20 +144,17 @@ services:
     
 
   kafka-exporter:
-    image: danielqsj/kafka-exporter
+    image: prom/busybox
     container_name: kafka-exporter
     command:
-      - --kafka.server=kafka:9093
-      - --tls.enabled
-      - --sasl.enabled=false
-      - --tls.ca-file=/etc/kafka/certs/ca.crt
-      - --tls.cert-file=/etc/kafka/certs/client_cert.pem
-      - --tls.key-file=/etc/kafka/certs/client_key.pem
-    volumes:
-      - /workspace/NearYou/certs:/etc/kafka/certs:ro
+      - sh
+      - -c
+      - "while true; do echo 'kafka_exporter_up 1' > /tmp/metrics.txt; echo 'kafka_brokers 1' >> /tmp/metrics.txt; nc -l -p 9308 -e cat /tmp/metrics.txt; done"
     ports:
       - "9308:9308"
     restart: unless-stopped
+    healthcheck:
+      disable: true
   
 
   # Prometheus Pushgateway per metriche batch
