@@ -17,7 +17,7 @@ datasources:
     secureJsonData:
       password: pwe@123@l@
     editable: true
-    isDefault: true
+    isDefault: false
 
   # PostgreSQL
   - name: PostgreSQL
@@ -31,21 +31,22 @@ datasources:
       sslmode: disable
       postgresVersion: 1500
     editable: true
+    isDefault: false
 
-  # Prometheus
+  # Prometheus - Importante: nome esatto "Prometheus"
   - name: Prometheus
     type: prometheus
     access: proxy
     orgId: 1
     url: http://prometheus:9090
-    isDefault: false
+    isDefault: true
     jsonData:
       timeInterval: 15s
       httpMethod: GET
     version: 1
     editable: true
 
-  # Loki
+  # Loki - Importante: nome esatto "Loki"
   - name: Loki
     type: loki
     access: proxy

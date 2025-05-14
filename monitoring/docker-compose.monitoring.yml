@@ -5,7 +5,7 @@ services:
     image: prom/prometheus:v2.45.0
     container_name: prometheus
     volumes:
-      - ./prometheus:/etc/prometheus
+      - ./monitoring/prometheus:/etc/prometheus
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -21,12 +21,14 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    networks:
+      - nearyou-network
 
   loki:
     image: grafana/loki:2.9.1
     container_name: loki
     volumes:
-      - ./loki/loki.yml:/etc/loki/local-config.yaml
+      - ./monitoring/loki/loki.yml:/etc/loki/local-config.yaml
       - loki_data:/loki
     ports:
       - "3100:3100"
@@ -37,18 +39,22 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    networks:
+      - nearyou-network
 
   promtail:
     image: grafana/promtail:2.9.1
     container_name: promtail
     volumes:
-      - ./loki/promtail.yml:/etc/promtail/config.yml
+      - ./monitoring/loki/promtail.yml:/etc/promtail/config.yml
       - /var/log:/var/log
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
     command: -config.file=/etc/promtail/config.yml
     restart: unless-stopped
     depends_on:
       - loki
+    networks:
+      - nearyou-network
 
   node-exporter:
     image: prom/node-exporter:v1.6.1
@@ -70,6 +76,8 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    networks:
+      - nearyou-network
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.47.1
@@ -80,7 +88,6 @@ services:
       - /var/run:/var/run:ro
       - /sys:/sys:ro
       - /var/lib/docker:/var/lib/docker:ro
-      
     ports:
       - "8082:8080"  
     restart: unless-stopped
@@ -89,10 +96,10 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-
+    networks:
+      - nearyou-network
 
   # Esportatori per database e servizi
-
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter
     container_name: postgres-exporter
@@ -101,8 +108,8 @@ services:
     ports:
       - "9187:9187"
     restart: unless-stopped
-    depends_on:
-      - postgres
+    networks:
+      - nearyou-network
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:9187/metrics"]
       interval: 30s
@@ -118,8 +125,8 @@ services:
     ports:
       - "9121:9121"
     restart: unless-stopped
-    depends_on:
-      - redis-cache
+    networks:
+      - nearyou-network
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:9121/metrics"]
       interval: 30s
@@ -136,8 +143,8 @@ services:
     ports:
       - "9116:9116"
     restart: unless-stopped
-    depends_on:
-      - clickhouse
+    networks:
+      - nearyou-network
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:9116/metrics"]
       interval: 30s
@@ -158,16 +165,33 @@ services:
     ports:
       - "9308:9308"
     restart: unless-stopped
-    depends_on:
-      - kafka
+    networks:
+      - nearyou-network
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:9308/metrics"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  
+  # Prometheus Pushgateway per metriche batch
+  pushgateway:
+    image: prom/pushgateway:v1.6.0
+    container_name: pushgateway
+    ports:
+      - "9091:9091"
+    restart: unless-stopped
+    networks:
+      - nearyou-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9091/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   prometheus_data:
   loki_data:
+
+networks:
+  nearyou-network:
+    external: true
