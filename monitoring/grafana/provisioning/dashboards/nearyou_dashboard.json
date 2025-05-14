@@ -184,7 +184,7 @@
           },
           "format": 1,
           "queryType": "sql",
-          "rawSql": "SELECT user_id, username,password, full_name, email, phone_number, user_type, gender, age, profession, interests, country, city, registration_time FROM nearyou.users",
+          "rawSql": "SELECT user_id, username, full_name, email, phone_number, password, user_type, gender, age, profession, interests, country, city, registration_time FROM nearyou.users",
           "refId": "A"
         }
       ],
@@ -685,7 +685,7 @@
     ]
   },
   "timezone": "",
-  "title": "NearYou - Dashboard Completa",
+  "title": "NearYou - Dashboard Utente",
   "uid": "nearyou-dashboard-v3",
   "version": 1,
   "weekStart": ""
