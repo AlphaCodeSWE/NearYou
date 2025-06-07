@@ -175,12 +175,18 @@ services:
     volumes:
       - ../..:/workspace:cached           
       - ../../certs:/workspace/certs:ro   
-    command: python3 /workspace/src/data_pipeline/consumer.py  
+    command: >
+      python3 -m bytewax.run 
+      --workers 2
+      --snapshot-interval 30
+      src.data_pipeline.bytewax_flow:build_dataflow
     depends_on:
       - kafka
       - clickhouse
       - message-generator
-    restart: "no"
+    environment:
+      - PYTHONPATH=/workspace
+    restart: unless-stopped
 
   generate_users:
     build:
