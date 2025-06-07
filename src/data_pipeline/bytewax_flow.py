@@ -55,9 +55,8 @@ def build_dataflow() -> Dataflow:
     db_conn = DatabaseConnections()
     
     # 1. Input: leggi da Kafka
-    # In Bytewax 0.19.0, KafkaSource vuole brokers come stringa e altri parametri direttamente
+    # Costruisci configurazione come dizionario semplice
     kafka_config = {
-        "bootstrap.servers": KAFKA_BROKER,
         "group.id": CONSUMER_GROUP,
         "security.protocol": "SSL",
         "ssl.ca.location": SSL_CAFILE,
@@ -67,13 +66,15 @@ def build_dataflow() -> Dataflow:
         "enable.auto.commit": "false",
     }
     
+    # In Bytewax 0.19.0, sembra che la sintassi sia:
+    # KafkaSource(brokers, topics, starting_offset, add_config)
     stream = op.input(
         "kafka_input", 
         flow, 
         KafkaSource(
+            brokers=[KAFKA_BROKER],
             topics=[KAFKA_TOPIC],
-            brokers=KAFKA_BROKER,
-            **kafka_config  # Passa tutti i parametri come kwargs
+            add_config=kafka_config  # add_config invece di config o **kwargs
         )
     )
     
