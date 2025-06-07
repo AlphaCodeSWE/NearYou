@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, Optional, Tuple
 
 from bytewax import operators as op
-from bytewax.connectors.kafka import KafkaSource, KafkaSink
+from bytewax.connectors.kafka import KafkaSource
 from bytewax.dataflow import Dataflow
 from bytewax.run import cli_main
 
@@ -27,20 +27,19 @@ logger = logging.getLogger(__name__)
 setup_logging()
 
 # Parser per messaggi Kafka
-def parse_kafka_message(msg: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
+def parse_kafka_message(msg) -> Tuple[str, Dict[str, Any]]:
     """Parsa messaggio Kafka e restituisce (key, value)."""
     try:
-        # Decodifica JSON se necessario
-        if isinstance(msg.get("value"), bytes):
-            value = json.loads(msg["value"].decode("utf-8"))
+        # In Bytewax, msg è già il valore deserializzato
+        if isinstance(msg, bytes):
+            value = json.loads(msg.decode("utf-8"))
+        elif isinstance(msg, str):
+            value = json.loads(msg)
         else:
-            value = msg.get("value", {})
+            value = msg
         
         # Usa user_id come chiave per partitioning
         key = str(value.get("user_id", "unknown"))
-        
-        # Aggiungi offset per tracking
-        value["_offset"] = msg.get("offset", 0)
         
         return (key, value)
     except Exception as e:
@@ -55,22 +54,26 @@ def build_dataflow() -> Dataflow:
     # Inizializza connessioni database (singleton pattern)
     db_conn = DatabaseConnections()
     
-    # 1. Input: leggi da Kafka con configurazione corretta
+    # 1. Input: leggi da Kafka
+    # In Bytewax 0.19.0, KafkaSource vuole brokers come stringa e altri parametri direttamente
+    kafka_config = {
+        "bootstrap.servers": KAFKA_BROKER,
+        "group.id": CONSUMER_GROUP,
+        "security.protocol": "SSL",
+        "ssl.ca.location": SSL_CAFILE,
+        "ssl.certificate.location": SSL_CERTFILE,
+        "ssl.key.location": SSL_KEYFILE,
+        "auto.offset.reset": "latest",
+        "enable.auto.commit": "false",
+    }
+    
     stream = op.input(
         "kafka_input", 
         flow, 
         KafkaSource(
-            brokers=[KAFKA_BROKER],
             topics=[KAFKA_TOPIC],
-            config={
-                "group.id": CONSUMER_GROUP,
-                "security.protocol": "SSL",
-                "ssl.ca.location": SSL_CAFILE,
-                "ssl.certificate.location": SSL_CERTFILE,
-                "ssl.key.location": SSL_KEYFILE,
-                "auto.offset.reset": "latest",
-                "enable.auto.commit": "false",
-            }
+            brokers=KAFKA_BROKER,
+            **kafka_config  # Passa tutti i parametri come kwargs
         )
     )
     
