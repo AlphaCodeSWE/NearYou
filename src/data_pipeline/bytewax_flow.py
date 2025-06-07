@@ -26,20 +26,6 @@ from .operators import (
 logger = logging.getLogger(__name__)
 setup_logging()
 
-# Configurazione SSL per Kafka
-def create_kafka_config() -> Dict[str, Any]:
-    """Crea configurazione Kafka con SSL."""
-    return {
-        "bootstrap.servers": KAFKA_BROKER,
-        "group.id": CONSUMER_GROUP,
-        "security.protocol": "SSL",
-        "ssl.ca.location": SSL_CAFILE,
-        "ssl.certificate.location": SSL_CERTFILE,
-        "ssl.key.location": SSL_KEYFILE,
-        "auto.offset.reset": "latest",
-        "enable.auto.commit": "false",
-    }
-
 # Parser per messaggi Kafka
 def parse_kafka_message(msg: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
     """Parsa messaggio Kafka e restituisce (key, value)."""
@@ -69,10 +55,24 @@ def build_dataflow() -> Dataflow:
     # Inizializza connessioni database (singleton pattern)
     db_conn = DatabaseConnections()
     
-    # 1. Input: leggi da Kafka
-    kafka_config = create_kafka_config()
-    stream = op.input("kafka_input", flow, 
-                      KafkaSource([KAFKA_TOPIC], brokers=kafka_config))
+    # 1. Input: leggi da Kafka con configurazione corretta
+    stream = op.input(
+        "kafka_input", 
+        flow, 
+        KafkaSource(
+            brokers=[KAFKA_BROKER],
+            topics=[KAFKA_TOPIC],
+            config={
+                "group.id": CONSUMER_GROUP,
+                "security.protocol": "SSL",
+                "ssl.ca.location": SSL_CAFILE,
+                "ssl.certificate.location": SSL_CERTFILE,
+                "ssl.key.location": SSL_KEYFILE,
+                "auto.offset.reset": "latest",
+                "enable.auto.commit": "false",
+            }
+        )
+    )
     
     # 2. Parse messaggi
     parsed = op.map("parse", stream, parse_kafka_message)
