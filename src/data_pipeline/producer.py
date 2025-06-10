@@ -26,7 +26,7 @@ from src.utils.utils import wait_for_broker
 logger = logging.getLogger(__name__)
 setup_logging()
 
-async def wait_for_osrm(interval: int = 5, max_retries: int = 100):
+async def wait_for_osrm(interval: int = 5, max_retries: int = 500):
     for attempt in range(max_retries):
         try:
             async with httpx.AsyncClient() as client:
