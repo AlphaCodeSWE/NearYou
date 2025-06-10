@@ -147,13 +147,13 @@ def build_dataflow() -> Dataflow:
     
     # 6. Scrivi su ClickHouse (side effect)
     op.inspect("write_clickhouse", with_messages,
-               lambda x: write_to_clickhouse(x, db_conn))
+               lambda step_id, x: write_to_clickhouse(x, db_conn))
     
     # 7. Log finale per debugging
     op.inspect("log_processed", with_messages,
-               lambda x: logger.info(f"Processato evento per user {x[0]}: "
-                                   f"shop={x[1].get('shop_name')} "
-                                   f"distance={x[1].get('distance'):.1f}m"))
+               lambda step_id, x: logger.info(f"Processato evento per user {x[0]}: "
+                                            f"shop={x[1].get('shop_name')} "
+                                            f"distance={x[1].get('distance'):.1f}m"))
     
     return flow
 
