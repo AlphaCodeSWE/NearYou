@@ -29,6 +29,14 @@ NearYou utilizza un'architettura a microservizi:
 - Git
 - Make (opzionale)
 
+### ETL AGG, CONSUMI: 
+~4-8 run/mese (media 6) + check giornalieri:
+- Check giornaliero: <1 secondo, query singola
+- ETL completo: 6 × 500MB = 3GB/mese
+- CPU: 5 min × 6 = 30 min/mese + 30 sec check = ~31 min/mese
+- Query PostgreSQL: 300k query/mese
+- Costo stimato: €0.60-1/mese
+
 ### Installazione Rapida
 ```bash
 # Clona il repository
