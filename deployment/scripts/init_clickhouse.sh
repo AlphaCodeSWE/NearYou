@@ -19,7 +19,7 @@ echo "ClickHouse è pronto. Procedo con la creazione."
 echo "Creazione del database 'nearyou' (se non esiste già)..."
 docker exec -i clickhouse-server clickhouse-client --query "CREATE DATABASE IF NOT EXISTS nearyou;"
 
-# Creazione della tabella users all'interno del database 'nearyou'
+# Creazione della tabella users
 echo "Creazione della tabella users..."
 docker exec -i clickhouse-server clickhouse-client --query "
     USE nearyou;
@@ -42,7 +42,7 @@ docker exec -i clickhouse-server clickhouse-client --query "
     ORDER BY user_id;
 "
 
-# Creazione della tabella user_events all'interno del database 'nearyou'
+# Creazione della tabella user_events
 echo "Creazione della tabella user_events..."
 docker exec -i clickhouse-server clickhouse-client --query "
     USE nearyou;
@@ -57,6 +57,86 @@ docker exec -i clickhouse-server clickhouse-client --query "
         poi_info   String
     ) ENGINE = MergeTree()
     ORDER BY event_id;
+"
+
+# Creazione della tabella user_visits
+echo "Creazione della tabella user_visits..."
+docker exec -i clickhouse-server clickhouse-client --query "
+    USE nearyou;
+    CREATE TABLE IF NOT EXISTS user_visits (
+        visit_id UInt64,
+        
+        -- Identificatori
+        user_id UInt64,
+        shop_id UInt64,
+        offer_id UInt64 DEFAULT 0,
+        
+        -- Timing della visita
+        visit_start_time DateTime,
+        visit_end_time DateTime DEFAULT toDateTime(0),
+        duration_minutes UInt32 DEFAULT 0,
+        
+        -- Dettagli comportamento
+        offer_accepted Boolean DEFAULT false,
+        estimated_spending Float32 DEFAULT 0.0,
+        user_satisfaction UInt8 DEFAULT 5,
+        
+        -- Contesto
+        day_of_week UInt8 DEFAULT toDayOfWeek(visit_start_time),
+        hour_of_day UInt8 DEFAULT toHour(visit_start_time),
+        weather_condition String DEFAULT '',
+        
+        -- Dati utente snapshot
+        user_age UInt8 DEFAULT 0,
+        user_profession String DEFAULT '',
+        user_interests String DEFAULT '',
+        
+        -- Dati negozio snapshot  
+        shop_name String DEFAULT '',
+        shop_category String DEFAULT '',
+        
+        -- Metadati
+        created_at DateTime DEFAULT now()
+        
+    ) ENGINE = MergeTree()
+    PARTITION BY toYYYYMM(visit_start_time)
+    ORDER BY (user_id, visit_start_time, shop_id)
+    SETTINGS index_granularity = 8192;
+"
+
+# Creazione tabella aggregata per statistiche
+echo "Creazione della tabella user_visits_by_shop..."
+docker exec -i clickhouse-server clickhouse-client --query "
+    USE nearyou;
+    CREATE TABLE IF NOT EXISTS user_visits_by_shop (
+        shop_id UInt64,
+        visit_date Date,
+        total_visits UInt32,
+        total_duration_minutes UInt64,
+        offers_accepted UInt32,
+        avg_satisfaction Float32,
+        total_revenue Float32
+    ) ENGINE = SummingMergeTree(total_visits, total_duration_minutes, offers_accepted, total_revenue)
+    PARTITION BY toYYYYMM(visit_date)
+    ORDER BY (shop_id, visit_date);
+"
+
+# Creazione vista materializzata per statistiche real-time
+echo "Creazione vista materializzata mv_daily_shop_stats..."
+docker exec -i clickhouse-server clickhouse-client --query "
+    USE nearyou;
+    CREATE MATERIALIZED VIEW IF NOT EXISTS mv_daily_shop_stats
+    TO user_visits_by_shop
+    AS SELECT
+        shop_id,
+        toDate(visit_start_time) as visit_date,
+        count() as total_visits,
+        sum(duration_minutes) as total_duration_minutes,
+        countIf(offer_accepted) as offers_accepted,
+        avg(user_satisfaction) as avg_satisfaction,
+        sum(estimated_spending) as total_revenue
+    FROM user_visits
+    GROUP BY shop_id, visit_date;
 "
 
 echo "Inizializzazione di ClickHouse completata."
