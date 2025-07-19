@@ -309,10 +309,12 @@ services:
       - AIRFLOW__CELERY__BROKER_URL=redis://airflow-redis:6379/0
       - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@airflow-postgres/airflow
       - AIRFLOW__CORE__WORKER_LOG_SERVER_BASE_URL=http://airflow-worker:8793
+      - PYTHONPATH=/opt/airflow_home:/workspace 
     volumes:
       - airflow_data:/opt/airflow_home
       - ../../airflow/dags:/opt/airflow_home/dags  
       - ../scripts/entrypoint.sh:/entrypoint.sh:ro  
+      - ../..:/workspace:ro
     security_opt:
       - seccomp:unconfined
     command: ["/bin/bash","/entrypoint.sh"]
@@ -332,9 +334,11 @@ services:
       - AIRFLOW__CELERY__BROKER_URL=redis://airflow-redis:6379/0
       - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@airflow-postgres/airflow
       - AIRFLOW__CORE__WORKER_LOG_SERVER_BASE_URL=http://airflow-worker:8793
+      - PYTHONPATH=/opt/airflow_home:/workspace
     volumes:
       - airflow_data:/opt/airflow_home
       - ../../airflow/dags:/opt/airflow_home/dags  
+      - ../..:/workspace:ro 
     ports:
       - "8793:8793"
     security_opt:
