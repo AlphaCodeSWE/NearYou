@@ -1,4 +1,4 @@
-# ETL Shops & Offers - Versione autonoma per Airflow
+# ETL Shops & Offers - Versione autonoma per Airflow con supporto categorie inglesi
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from datetime import datetime, timedelta, date
@@ -28,24 +28,75 @@ POSTGRES_CONFIG = {
     'database': 'near_you_shops'
 }
 
-# ===== CONFIGURAZIONE OFFERTE COMPLETA =====
+# ===== CONFIGURAZIONE OFFERTE COMPLETA (ITALIANO + INGLESE) =====
 CATEGORY_DISCOUNT_RANGES = {
+    # Categorie originali italiane (mantieni per compatibilità)
     "ristorante": (10, 25), "bar": (15, 30), "abbigliamento": (20, 40),
     "supermercato": (5, 15), "elettronica": (10, 20), "farmacia": (5, 10),
     "libreria": (15, 25), "gelateria": (10, 20), "parrucchiere": (20, 35),
-    "palestra": (25, 40), "shoes": (15, 35), "jewelry": (20, 50),
-    "bakery": (10, 20), "butcher": (5, 15), "florist": (15, 30)
+    "palestra": (25, 40),
+    
+    # Categorie inglesi da Overpass API - TOP CATEGORIE MILANO
+    "clothes": (20, 40),        # Abbigliamento - 1,718 negozi
+    "hairdresser": (20, 35),    # Parrucchieri - 1,272 negozi  
+    "supermarket": (5, 15),     # Supermercati - 748 negozi
+    "bakery": (10, 20),         # Panetterie - 600 negozi
+    "car_repair": (15, 30),     # Autofficine - 538 negozi
+    "beauty": (20, 35),         # Centri estetici - 503 negozi
+    "convenience": (5, 15),     # Negozi di convenienza - 433 negozi
+    "jewelry": (20, 50),        # Gioiellerie - 331 negozi
+    "newsagent": (10, 20),      # Edicole - 294 negozi
+    "car": (10, 25),            # Concessionarie auto - 293 negozi
+    
+    # Altre categorie comuni
+    "pharmacy": (5, 10), "butcher": (5, 15), "florist": (15, 30),
+    "electronics": (10, 20), "books": (15, 25), "shoes": (15, 35),
+    "sports": (20, 30), "toys": (15, 25), "furniture": (15, 35),
+    "hardware": (10, 20), "pet": (10, 25), "bicycle": (15, 30),
+    "mobile_phone": (10, 20), "optician": (15, 25), "gift": (15, 30),
+    "stationery": (10, 25), "wine": (15, 35), "cheese": (10, 25),
+    "chocolate": (15, 30), "ice_cream": (10, 20), "coffee": (15, 25),
+    "tea": (15, 25), "spices": (10, 20), "organic": (10, 25),
+    "health_food": (15, 30), "cosmetics": (15, 35), "perfumery": (20, 40),
+    "massage": (25, 40), "tattoo": (20, 35), "locksmith": (15, 25),
+    "dry_cleaning": (10, 20), "laundry": (10, 20), "tailor": (15, 30)
 }
 
 CATEGORY_OFFER_DURATION = {
+    # Categorie italiane
     "ristorante": (7, 21), "bar": (3, 14), "abbigliamento": (14, 60),
     "supermercato": (1, 7), "elettronica": (30, 90), "farmacia": (14, 30),
     "libreria": (30, 60), "gelateria": (1, 7), "parrucchiere": (14, 30),
-    "palestra": (30, 90), "shoes": (14, 45), "jewelry": (30, 90),
-    "bakery": (1, 5), "butcher": (1, 3), "florist": (2, 7)
+    "palestra": (30, 90),
+    
+    # Categorie inglesi - TOP CATEGORIE
+    "clothes": (14, 60),        # Abbigliamento: 2 settimane - 2 mesi
+    "hairdresser": (14, 30),    # Parrucchieri: 2-4 settimane  
+    "supermarket": (1, 7),      # Supermercati: 1-7 giorni
+    "bakery": (1, 5),           # Panetterie: 1-5 giorni (fresco)
+    "car_repair": (30, 90),     # Autofficine: 1-3 mesi
+    "beauty": (14, 30),         # Centri estetici: 2-4 settimane
+    "convenience": (1, 7),      # Convenience: 1-7 giorni
+    "jewelry": (30, 90),        # Gioiellerie: 1-3 mesi
+    "newsagent": (7, 21),       # Edicole: 1-3 settimane
+    "car": (30, 90),            # Concessionarie: 1-3 mesi
+    
+    # Altre categorie
+    "pharmacy": (14, 30), "butcher": (1, 3), "florist": (2, 7),
+    "electronics": (30, 90), "books": (30, 60), "shoes": (14, 45),
+    "sports": (14, 30), "toys": (14, 45), "furniture": (30, 90),
+    "hardware": (30, 60), "pet": (14, 30), "bicycle": (30, 60),
+    "mobile_phone": (14, 30), "optician": (30, 60), "gift": (14, 45),
+    "stationery": (30, 60), "wine": (30, 90), "cheese": (3, 14),
+    "chocolate": (14, 30), "ice_cream": (1, 7), "coffee": (7, 21),
+    "tea": (30, 60), "spices": (30, 90), "organic": (7, 21),
+    "health_food": (14, 30), "cosmetics": (30, 60), "perfumery": (30, 90),
+    "massage": (30, 60), "tattoo": (60, 180), "locksmith": (30, 60),
+    "dry_cleaning": (14, 30), "laundry": (14, 30), "tailor": (30, 60)
 }
 
 CATEGORY_DESCRIPTIONS = {
+    # Descrizioni italiane (mantieni)
     "ristorante": [
         "Sconto speciale su tutti i piatti principali!",
         "Offerta aperitivo: ordina e risparmia!",
@@ -58,69 +109,173 @@ CATEGORY_DESCRIPTIONS = {
         "Aperitivo con sconto esclusivo!",
         "Colazione scontata dalle 7 alle 10!"
     ],
-    "abbigliamento": [
+    
+    # Descrizioni inglesi - TOP CATEGORIE
+    "clothes": [
         "Saldi esclusivi sui capi di stagione!",
         "Sconto speciale su accessori e scarpe!",
         "Promozione weekend: vesti il tuo stile!",
-        "Offerta studenti: moda a prezzi giovani!"
+        "Offerta studenti: moda a prezzi giovani!",
+        "Look perfetto a prezzi scontati!"
     ],
-    "supermercato": [
+    "hairdresser": [
+        "Bellezza in offerta: trattamenti scontati!",
+        "Taglio e piega a prezzo speciale!",
+        "Promozione colore: cambia look!",
+        "Offerta coppia: bellezza condivisa!",
+        "Nuovo stile, nuovo te: sconto esclusivo!"
+    ],
+    "supermarket": [
         "Spesa smart: risparmia sulla spesa quotidiana!",
         "Offerta freschezza: frutta e verdura scontate!",
         "Promozione famiglia: più compri, più risparmi!",
-        "Sconto sera: acquisti dopo le 18!"
+        "Sconto sera: acquisti dopo le 18!",
+        "La tua spesa conveniente è qui!"
     ],
-    "elettronica": [
+    "bakery": [
+        "Pane fresco con sconto speciale!",
+        "Dolci della casa a prezzi dolci!",
+        "Promozione mattina: colazione scontata!",
+        "Offerta famiglia: bontà per tutti!",
+        "Sapori autentici a prezzi speciali!"
+    ],
+    "car_repair": [
+        "Officina di fiducia: servizi scontati!",
+        "Tagliando auto a prezzo speciale!",
+        "Promozione pneumatici: viaggia sicuro!",
+        "Offerta revisione: risparmia ora!",
+        "La tua auto in perfetta forma!"
+    ],
+    "beauty": [
+        "Centro estetico: bellezza scontata!",
+        "Trattamenti viso e corpo in offerta!",
+        "Promozione relax: prenditi cura di te!",
+        "Offerta benessere: ti meriti il meglio!",
+        "Bellezza naturale a prezzi speciali!"
+    ],
+    "convenience": [
+        "Tutto quello che ti serve, scontato!",
+        "Comodità e convenienza sotto casa!",
+        "Promozione quotidiana: risparmia ogni giorno!",
+        "Offerta famiglia: necessità a prezzi giusti!",
+        "Il tuo negozio di fiducia!"
+    ],
+    "jewelry": [
+        "Gioielli preziosi a prezzi speciali!",
+        "Brillanti offerte per momenti speciali!",
+        "Promozione eleganza: scegli il meglio!",
+        "Offerta matrimonio: amore scontato!",
+        "Lusso accessibile solo per te!"
+    ],
+    "newsagent": [
+        "Edicola di quartiere: sconti su tutto!",
+        "Giornali e riviste a prezzo speciale!",
+        "Promozione cultura: informati risparmiando!",
+        "Offerta studenti: materiali scontati!",
+        "La tua edicola di fiducia!"
+    ],
+    "car": [
+        "Concessionaria: auto dei sogni scontate!",
+        "Promozione usato garantito!",
+        "Offerta finanziamento: guida subito!",
+        "Nuova auto, nuovo inizio!",
+        "Qualità e affidabilità a prezzi speciali!"
+    ],
+    
+    # Altre categorie
+    "pharmacy": [
+        "Farmacia di fiducia: salute scontata!",
+        "Benessere in offerta: prodotti per la salute!",
+        "Promozione vitamine e integratori!",
+        "Offerta famiglia: salute conveniente!"
+    ],
+    "electronics": [
         "Tech sale: tecnologia a prezzi incredibili!",
         "Offerta smartphone e accessori!",
         "Promozione back to school: studia smart!",
         "Weekend tech: sconti su tutti i device!"
     ],
-    "farmacia": [
-        "Benessere in offerta: prodotti per la salute!",
-        "Sconto cosmetica e igiene personale!",
-        "Promozione vitamine e integratori!",
-        "Offerta famiglia: salute conveniente!"
-    ],
-    "libreria": [
+    "books": [
         "Libri in offerta: nutri la tua mente!",
         "Sconto studenti su tutti i testi!",
         "Promozione lettura: bestseller scontati!",
         "Offerta cultura: libri e riviste!"
     ],
-    "gelateria": [
-        "Gelato fresco con sconto speciale!",
-        "Happy hour gelato: rinfrescati con noi!",
-        "Promozione famiglia: gusti per tutti!",
-        "Offerta estate: gelato a prezzi cool!"
+    "shoes": [
+        "Scarpe di qualità a prezzi scontati!",
+        "Promozione comfort: cammina bene!",
+        "Offerta stagionale: stile per tutti!",
+        "Passi sicuri con i nostri sconti!"
     ],
-    "parrucchiere": [
-        "Bellezza in offerta: trattamenti scontati!",
-        "Taglio e piega a prezzo speciale!",
-        "Promozione colore: cambia look!",
-        "Offerta coppia: bellezza condivisa!"
-    ],
-    "palestra": [
-        "Fitness in offerta: allena il tuo corpo!",
-        "Prova gratuita + sconto abbonamento!",
-        "Promozione estate: forma fisica top!",
-        "Offerta studenti: sport accessibile!"
+    "sports": [
+        "Articoli sportivi in grande offerta!",
+        "Promozione fitness: allenati risparmiando!",
+        "Offerta squadra: equipaggiamento scontato!",
+        "Sport e benessere a prezzi speciali!"
     ]
 }
 
 CATEGORY_OFFER_PROBABILITY = {
+    # Probabilità italiane
     "ristorante": 0.8, "bar": 0.9, "abbigliamento": 0.7, "supermercato": 0.6,
     "elettronica": 0.5, "farmacia": 0.4, "libreria": 0.5, "gelateria": 0.8,
-    "parrucchiere": 0.6, "palestra": 0.7, "shoes": 0.7, "jewelry": 0.6,
-    "bakery": 0.8, "butcher": 0.5, "florist": 0.6
+    "parrucchiere": 0.6, "palestra": 0.7,
+    
+    # Probabilità inglesi - TOP CATEGORIE
+    "clothes": 0.7,         # Alta (moda)
+    "hairdresser": 0.6,     # Media-alta (servizi)
+    "supermarket": 0.6,     # Media-alta (necessità)
+    "bakery": 0.8,          # Alta (freschezza)
+    "car_repair": 0.4,      # Media-bassa (servizi speciali)
+    "beauty": 0.7,          # Alta (benessere)
+    "convenience": 0.6,     # Media-alta (quotidiano)
+    "jewelry": 0.6,         # Media-alta (lusso)
+    "newsagent": 0.5,       # Media (tradizionale)
+    "car": 0.4,             # Media-bassa (grandi acquisti)
+    
+    # Altre probabilità
+    "pharmacy": 0.4, "butcher": 0.5, "florist": 0.6, "electronics": 0.5,
+    "books": 0.5, "shoes": 0.7, "sports": 0.6, "toys": 0.6,
+    "furniture": 0.5, "hardware": 0.4, "pet": 0.6, "bicycle": 0.6,
+    "mobile_phone": 0.5, "optician": 0.5, "gift": 0.7, "stationery": 0.5,
+    "wine": 0.7, "cheese": 0.6, "chocolate": 0.8, "ice_cream": 0.8,
+    "coffee": 0.8, "tea": 0.6, "spices": 0.5, "organic": 0.6,
+    "health_food": 0.6, "cosmetics": 0.7, "perfumery": 0.7, "massage": 0.7,
+    "tattoo": 0.5, "locksmith": 0.3, "dry_cleaning": 0.4, "laundry": 0.4,
+    "tailor": 0.5
 }
 
 CATEGORY_MAX_USES = {
+    # Usi massimi italiani
     "ristorante": (50, 200), "bar": (100, 500), "abbigliamento": (20, 100),
     "supermercato": (200, 1000), "elettronica": (10, 50), "farmacia": (100, 300),
     "libreria": (30, 150), "gelateria": (100, 400), "parrucchiere": (20, 80),
-    "palestra": (50, 200), "shoes": (30, 120), "jewelry": (10, 50),
-    "bakery": (200, 800), "butcher": (100, 400), "florist": (50, 200)
+    "palestra": (50, 200),
+    
+    # Usi massimi inglesi - TOP CATEGORIE
+    "clothes": (20, 100),       # Abbigliamento: 20-100 usi
+    "hairdresser": (20, 80),    # Parrucchieri: 20-80 usi
+    "supermarket": (200, 1000), # Supermercati: 200-1000 usi
+    "bakery": (200, 800),       # Panetterie: 200-800 usi
+    "car_repair": (30, 150),    # Autofficine: 30-150 usi
+    "beauty": (30, 120),        # Centri estetici: 30-120 usi
+    "convenience": (150, 600),  # Convenience: 150-600 usi
+    "jewelry": (10, 50),        # Gioiellerie: 10-50 usi
+    "newsagent": (100, 400),    # Edicole: 100-400 usi
+    "car": (5, 30),             # Concessionarie: 5-30 usi
+    
+    # Altri usi massimi
+    "pharmacy": (100, 300), "butcher": (100, 400), "florist": (50, 200),
+    "electronics": (10, 50), "books": (30, 150), "shoes": (30, 120),
+    "sports": (40, 160), "toys": (25, 100), "furniture": (10, 50),
+    "hardware": (40, 200), "pet": (50, 200), "bicycle": (20, 80),
+    "mobile_phone": (20, 100), "optician": (30, 120), "gift": (40, 160),
+    "stationery": (50, 200), "wine": (30, 150), "cheese": (80, 300),
+    "chocolate": (100, 400), "ice_cream": (150, 600), "coffee": (200, 800),
+    "tea": (50, 200), "spices": (30, 120), "organic": (60, 250),
+    "health_food": (40, 160), "cosmetics": (50, 200), "perfumery": (20, 80),
+    "massage": (20, 80), "tattoo": (10, 40), "locksmith": (20, 80),
+    "dry_cleaning": (50, 200), "laundry": (60, 250), "tailor": (20, 80)
 }
 
 # Defaults
@@ -145,6 +300,7 @@ class AirflowOffersService:
         """Genera offerte per tutti i negozi nel database."""
         total_offers = 0
         shops_processed = 0
+        categories_stats = {}
         
         try:
             with self.get_connection() as conn:
@@ -159,21 +315,35 @@ class AirflowOffersService:
                     """)
                     shops = cur.fetchall()
                     
-                    logger.info(f"Trovati {len(shops)} negozi validi per generare offerte")
+                    logger.info(f"🏪 Trovati {len(shops)} negozi validi per generare offerte")
                     
                     for shop in shops:
                         shops_processed += 1
+                        category = shop['category'].lower().strip()
+                        
+                        # Traccia statistiche per categoria
+                        if category not in categories_stats:
+                            categories_stats[category] = {'total': 0, 'with_offers': 0}
+                        categories_stats[category]['total'] += 1
+                        
                         offers = self._generate_offers_for_shop(
-                            shop['shop_id'], shop['shop_name'], shop['category']
+                            shop['shop_id'], shop['shop_name'], category
                         )
                         
                         if offers:
                             inserted = self._insert_offers(offers)
                             total_offers += inserted
                             if inserted > 0:
-                                logger.info(f"✅ {shop['shop_name']} ({shop['category']}): {inserted} offerte")
+                                categories_stats[category]['with_offers'] += 1
+                                logger.debug(f"✅ {shop['shop_name']} ({category}): {inserted} offerte")
                         else:
                             logger.debug(f"⏭️ {shop['shop_name']}: saltato per probabilità")
+                    
+                    # Log statistiche per categoria
+                    logger.info("📊 STATISTICHE OFFERTE PER CATEGORIA:")
+                    for cat, stats in sorted(categories_stats.items(), key=lambda x: x[1]['total'], reverse=True)[:10]:
+                        coverage = (stats['with_offers'] / stats['total'] * 100) if stats['total'] > 0 else 0
+                        logger.info(f"   {cat}: {stats['with_offers']}/{stats['total']} ({coverage:.1f}%)")
         
         except Exception as e:
             logger.error(f"❌ Errore generazione offerte: {e}")
@@ -181,7 +351,8 @@ class AirflowOffersService:
         
         return {
             'total_offers': total_offers,
-            'shops_processed': shops_processed
+            'shops_processed': shops_processed,
+            'categories_stats': categories_stats
         }
     
     def _generate_offers_for_shop(self, shop_id: int, shop_name: str, category: str) -> List[Dict]:
@@ -492,7 +663,8 @@ def generate_offers(**kwargs):
         return {
             'expired_cleaned': expired_count,
             'new_offers': result['total_offers'],
-            'shops_processed': result['shops_processed']
+            'shops_processed': result['shops_processed'],
+            'categories_stats': result['categories_stats']
         }
         
     except Exception as e:
@@ -529,39 +701,48 @@ def validate_data_quality(**kwargs):
         """)
         shops_without_offers = cur.fetchone()[0]
         
-        # Top categorie
+        # Top categorie con offerte
         cur.execute("""
-            SELECT category, COUNT(*) as count
-            FROM shops 
-            WHERE category IS NOT NULL 
-            GROUP BY category 
-            ORDER BY count DESC 
-            LIMIT 5
+            SELECT s.category, 
+                   COUNT(s.shop_id) as total_shops,
+                   COUNT(o.offer_id) as shops_with_offers,
+                   ROUND(AVG(o.discount_percent), 1) as avg_discount
+            FROM shops s
+            LEFT JOIN offers o ON s.shop_id = o.shop_id AND o.is_active = true
+            GROUP BY s.category
+            ORDER BY total_shops DESC
+            LIMIT 10
         """)
-        top_categories = cur.fetchall()
+        top_categories_with_offers = cur.fetchall()
         
         # Report finale
-        logger.info("=" * 50)
-        logger.info("📊 REPORT QUALITÀ DATI ETL")
-        logger.info("=" * 50)
-        logger.info(f"🏪 Negozi totali: {total_shops}")
-        logger.info(f"📥 Negozi inseriti oggi: {shops_inserted}")
+        logger.info("=" * 60)
+        logger.info("📊 REPORT QUALITÀ DATI ETL - OFFERTE AGGIORNATE")
+        logger.info("=" * 60)
+        logger.info(f"🏪 Negozi totali: {total_shops:,}")
+        logger.info(f"📥 Negozi inseriti oggi: {shops_inserted:,}")
         logger.info(f"📂 Categorie uniche: {unique_categories}")
-        logger.info(f"🎁 Offerte attive: {active_offers}")
-        logger.info(f"✨ Nuove offerte oggi: {offers_result.get('new_offers', 0)}")
-        logger.info(f"⚠️ Negozi senza offerte: {shops_without_offers}")
+        logger.info(f"🎁 Offerte attive: {active_offers:,}")
+        logger.info(f"✨ Nuove offerte oggi: {offers_result.get('new_offers', 0):,}")
+        logger.info(f"⚠️ Negozi senza offerte: {shops_without_offers:,}")
+        logger.info(f"📈 Coverage offerte: {((active_offers/total_shops)*100):.1f}%")
         
-        logger.info("\n🔝 TOP 5 CATEGORIE:")
-        for cat, count in top_categories:
-            logger.info(f"   {cat}: {count} negozi")
+        logger.info("\n🔝 TOP 10 CATEGORIE CON STATISTICHE OFFERTE:")
+        for cat, total, with_offers, avg_discount in top_categories_with_offers:
+            coverage = (with_offers / total * 100) if total > 0 else 0
+            avg_discount_str = f"{avg_discount}%" if avg_discount else "N/A"
+            logger.info(f"   {cat:15} | {total:4} negozi | {with_offers:4} offerte | {coverage:5.1f}% | avg {avg_discount_str}")
         
         # Controlli qualità
         warnings = []
         if shops_without_offers > total_shops * 0.5:
-            warnings.append(f"Troppi negozi senza offerte: {shops_without_offers}/{total_shops}")
+            warnings.append(f"Troppi negozi senza offerte: {shops_without_offers:,}/{total_shops:,}")
         
         if active_offers == 0:
             warnings.append("Nessuna offerta attiva trovata")
+        
+        if active_offers / total_shops < 0.3:
+            warnings.append(f"Coverage offerte bassa: {((active_offers/total_shops)*100):.1f}%")
         
         if warnings:
             logger.warning("⚠️ AVVERTIMENTI QUALITÀ:")
@@ -570,7 +751,7 @@ def validate_data_quality(**kwargs):
         else:
             logger.info("✅ Tutti i controlli qualità superati!")
         
-        logger.info("=" * 50)
+        logger.info("=" * 60)
         
         return {
             'total_shops': total_shops,
@@ -579,7 +760,8 @@ def validate_data_quality(**kwargs):
             'active_offers': active_offers,
             'new_offers': offers_result.get('new_offers', 0),
             'shops_without_offers': shops_without_offers,
-            'top_categories': top_categories,
+            'coverage_percent': (active_offers/total_shops)*100 if total_shops > 0 else 0,
+            'top_categories_with_offers': top_categories_with_offers,
             'warnings': warnings
         }
         
@@ -598,27 +780,33 @@ with DAG(
     default_args=default_args,
     schedule_interval='@daily',
     catchup=False,
-    description='ETL completo per negozi e generazione offerte automatiche',
-    tags=['nearyou', 'etl', 'shops', 'offers', 'milano'],
+    description='ETL completo per negozi Milano e generazione offerte automatiche multilingua',
+    tags=['nearyou', 'etl', 'shops', 'offers', 'milano', 'multilang'],
     max_active_runs=1,
     doc_md="""
-    ## ETL NearYou - Negozi e Offerte
+    ## ETL NearYou - Negozi Milano e Offerte (IT/EN)
     
     Questo DAG esegue:
     1. **Extract**: Scarica negozi da Overpass API (Milano)
-    2. **Transform**: Pulisce e normalizza i dati
+    2. **Transform**: Pulisce e normalizza i dati (supporta categorie IT/EN)
     3. **Load**: Inserisce negozi in PostgreSQL
-    4. **Offers**: Genera offerte casuali per ogni negozio
-    5. **Validate**: Controlla qualità dei dati
+    4. **Offers**: Genera offerte casuali per ogni negozio (configurazione multilingua)
+    5. **Validate**: Controlla qualità dei dati e coverage offerte
+    
+    ### Caratteristiche
+    -  Supporto categorie italiane e inglesi
+    -  Configurazione sconti per categoria specifica  
+    -  Targeting età e durata personalizzata
+    -  Report qualità con statistiche dettagliate
+    
+    ### Output Atteso
+    - ~14K negozi Milano
+    - ~12K offerte (85%+ coverage)
+    - Top categorie: clothes, hairdresser, supermarket
     
     ### Frequenza
-    - Esecuzione: Giornaliera
-    - Durata media: 5-10 minuti
-    
-    ### Output
-    - Negozi inseriti in tabella `shops`
-    - Offerte generate in tabella `offers`
-    - Report qualità nei log
+    - Esecuzione: Giornaliera alle 02:00
+    - Durata media: 5-15 minuti
     """
 ) as dag:
 
@@ -631,7 +819,7 @@ with DAG(
     transform_task = PythonOperator(
         task_id='transform_data',
         python_callable=transform_data,
-        doc_md="Trasforma e pulisce i dati per il database"
+        doc_md="Trasforma e pulisce i dati per il database (supporto multilang)"
     )
 
     load_task = PythonOperator(
@@ -643,13 +831,13 @@ with DAG(
     offers_task = PythonOperator(
         task_id='generate_offers',
         python_callable=generate_offers,
-        doc_md="Genera offerte casuali per tutti i negozi"
+        doc_md="Genera offerte casuali con configurazione IT/EN per categoria"
     )
 
     validate_task = PythonOperator(
         task_id='validate_data_quality',
         python_callable=validate_data_quality,
-        doc_md="Valida qualità dati e genera report"
+        doc_md="Valida qualità dati e genera report dettagliato con coverage"
     )
 
     # Pipeline flow
