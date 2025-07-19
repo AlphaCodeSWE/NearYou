@@ -71,12 +71,7 @@ def get_postgres_connection():
         raise
 
 def get_prompt_template():
-    """
-    Restituisce il template per il prompt di generazione messaggi.
-    
-    Returns:
-        str: Template del prompt formattabile
-    """
+    """Template migliorato per includere meglio le offerte."""
     return """Sei un sistema di advertising che crea un messaggio conciso e coinvolgente per attirare clienti.
 
 Utente:
@@ -94,11 +89,11 @@ Negozio:
 Contesto:
 - L'utente è a pochi metri dal negozio.
 - Il messaggio deve essere breve (max 40 parole) e invogliare l'utente a fermarsi.
-- Se c'è un'offerta, DEVI includerla nel messaggio in modo naturale e accattivante.
+- Se c'è un'offerta con sconto, DEVI menzionare la percentuale nel messaggio.
 - Usa un tono amichevole e personalizzato.
 - Scrivi in italiano.
 
-Genera il messaggio personalizzato:"""
+Genera il messaggio personalizzato che include lo sconto se presente:"""
 
 def get_offer_section_template():
     """
