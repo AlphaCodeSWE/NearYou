@@ -18,6 +18,9 @@ let lazyLoadObserver = null;
 let isMapInitialized = false;
 let isDataLoaded = false;
 
+// NUOVO: Map per tracking marker esistenti (performance optimization)
+let markersMap = new Map(); // shop_id -> marker object
+
 // WebSocket variables
 let websocket = null;
 let isReconnecting = false;
@@ -271,6 +274,9 @@ function handleLogout() {
   localCache.notifications = [];
   localCache.profile = null;
   
+  // NUOVO: Clear markers map
+  markersMap.clear();
+  
   // Refresh the page
   window.location.reload();
 }
@@ -344,9 +350,10 @@ function clearMap() {
     if (userPolyline && userPolyline._map) map.removeLayer(userPolyline);
     
     // Clear shop markers
-    shopsMarkers.forEach(marker => {
+    markersMap.forEach(marker => {
       if (marker._map) map.removeLayer(marker);
     });
+    markersMap.clear();
     shopsMarkers = [];
     
     // Reset route
@@ -502,6 +509,11 @@ function updateUserPosition(positionData) {
   // Store position and update route
   currentPosition = latlng;
   routePoints.push(latlng);
+  
+  // Limit route points for performance (max 100 points)
+  if (routePoints.length > 100) {
+    routePoints = routePoints.slice(-100);
+  }
   
   // Update map
   if (!userMarker._map) {
@@ -768,7 +780,6 @@ async function fetchShopsInVisibleArea() {
   try {
     console.log("Fetching shops for visible area:", visibleArea);
     
-    // ✅ PATH CORRETTO CON /user/
     const res = await fetch(`/api/user/shops/inArea?n=${visibleArea.north}&s=${visibleArea.south}&e=${visibleArea.east}&w=${visibleArea.west}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
@@ -838,7 +849,153 @@ function generateFallbackShopsInArea(area) {
   return shops;
 }
 
-// 🚀 FUNZIONE FILTRO CORRETTA: Solo categoria richiesta + visitati
+// FUNZIONE OTTIMIZZATA PER PERFORMANCE - Update incrementali marker
+function updateShopMarkersOptimized(shops) {
+  console.log(`🗺️ Update incrementale per ${shops.length} negozi`);
+  
+  // 1. Crea Set degli ID attuali per lookup veloce
+  const currentShopIds = new Set(shops.map(shop => shop.id));
+  
+  // 2. RIMUOVI solo marker che non esistono più
+  for (const [shopId, marker] of markersMap.entries()) {
+    if (!currentShopIds.has(shopId)) {
+      map.removeLayer(marker);
+      markersMap.delete(shopId);
+    }
+  }
+  
+  // 3. AGGIUNGI/AGGIORNA solo marker necessari
+  shops.forEach(shop => {
+    const existingMarker = markersMap.get(shop.id);
+    
+    if (!existingMarker) {
+      // NUOVO marker - crealo
+      const marker = createShopMarker(shop);
+      marker.addTo(map);
+      markersMap.set(shop.id, marker);
+    } else {
+      // ESISTENTE - aggiorna solo se necessario
+      updateExistingMarker(existingMarker, shop);
+    }
+  });
+  
+  console.log(`✅ Marker ottimizzati: ${markersMap.size} totali sulla mappa`);
+}
+
+function createShopMarker(shop) {
+  // Controlla se visitato
+  const isVisited = visitedShops.some(v => v.shop_id === shop.id);
+  
+  // Scegli icona (crea solo se necessario)
+  let iconUrl = isVisited ? 
+    "https://maps.google.com/mapfiles/ms/icons/green.png" :
+    getShopCategoryIcon(shop.category);
+  
+  const shopIcon = L.icon({
+    iconUrl: iconUrl,
+    iconSize: [32, 32],
+    iconAnchor: [16, 32],
+    popupAnchor: [0, -32]
+  });
+  
+  const marker = L.marker([shop.lat, shop.lon], { icon: shopIcon });
+  
+  // Popup content
+  const popupContent = createPopupContent(shop, isVisited);
+  marker.bindPopup(popupContent);
+  
+  // Salva dati per confronti futuri
+  marker._shopData = {
+    id: shop.id,
+    visited: isVisited,
+    category: shop.category,
+    lat: shop.lat,
+    lon: shop.lon
+  };
+  
+  return marker;
+}
+
+function updateExistingMarker(marker, shop) {
+  const oldData = marker._shopData;
+  const isVisited = visitedShops.some(v => v.shop_id === shop.id);
+  
+  // Controlla se è cambiato qualcosa di importante
+  const needsUpdate = (
+    oldData.visited !== isVisited ||
+    oldData.category !== shop.category ||
+    Math.abs(oldData.lat - shop.lat) > 0.0001 ||
+    Math.abs(oldData.lon - shop.lon) > 0.0001
+  );
+  
+  if (needsUpdate) {
+    // Aggiorna posizione se cambiata
+    if (oldData.lat !== shop.lat || oldData.lon !== shop.lon) {
+      marker.setLatLng([shop.lat, shop.lon]);
+    }
+    
+    // Aggiorna icona se necessario
+    if (oldData.visited !== isVisited || oldData.category !== shop.category) {
+      const newIconUrl = isVisited ? 
+        "https://maps.google.com/mapfiles/ms/icons/green.png" :
+        getShopCategoryIcon(shop.category);
+        
+      const newIcon = L.icon({
+        iconUrl: newIconUrl,
+        iconSize: [32, 32],
+        iconAnchor: [16, 32],
+        popupAnchor: [0, -32]
+      });
+      
+      marker.setIcon(newIcon);
+    }
+    
+    // Aggiorna popup se necessario
+    const newPopupContent = createPopupContent(shop, isVisited);
+    marker.setPopupContent(newPopupContent);
+    
+    // Salva nuovi dati
+    marker._shopData = {
+      id: shop.id,
+      visited: isVisited,
+      category: shop.category,
+      lat: shop.lat,
+      lon: shop.lon
+    };
+    
+    console.log(`🔄 Aggiornato marker per ${shop.name || shop.shop_name}`);
+  }
+}
+
+function getShopCategoryIcon(category) {
+  const cat = category ? category.toLowerCase() : "";
+  
+  // Trova categoria principale
+  for (const [key, values] of Object.entries(categoryMapping)) {
+    if (key === "all") continue;
+    if (values.some(val => cat.includes(val) || val.includes(cat))) {
+      return categoryIcons[key] || "https://maps.google.com/mapfiles/ms/icons/red.png";
+    }
+  }
+  
+  return "https://maps.google.com/mapfiles/ms/icons/red.png";
+}
+
+function createPopupContent(shop, isVisited) {
+  return `
+    <div class="custom-popup">
+      <div class="popup-header ${isVisited ? 'visited' : ''}">${shop.name || shop.shop_name}</div>
+      <div class="popup-content">
+        ${isVisited ? '<div class="visited-badge">✅ Visitato!</div>' : ''}
+        <div>Categoria: ${shop.category}</div>
+        <div>ID: ${shop.id}</div>
+        ${shop.distance ? `<div>Distanza: ${(shop.distance * 1000).toFixed(0)}m</div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+// FUNZIONE FILTRO CORRETTA: Solo categoria richiesta + visitati
 function filterShopsByCategory() {
   if (!isDataLoaded || allShops.length === 0) {
     console.log("Impossibile filtrare: dati non ancora caricati");
@@ -889,14 +1046,14 @@ function filterShopsByCategory() {
   
   console.log(`✅ Filtro "${categoryFilter}": ${categoryCount} della categoria + ${finalShops.length - categoryCount} visitati extra = ${finalShops.length} totali mostrati`);
   
-  // Update shop markers on the map
-  updateShopMarkers(finalShops);
+  // CAMBIO CRITICO: usa la funzione ottimizzata
+  updateShopMarkersOptimized(finalShops);
   
   // Update count in UI (passa il conteggio della categoria)
   updateShopCount(finalShops, categoryCount);
 }
 
-// 📊 CONTEGGIO SEMPLICE - Solo il numero corrispondente al filtro
+// Conteggio semplice - Solo il numero corrispondente al filtro
 function updateShopCount(shopsDisplayed = null, categoryCount = null, visitedExtraCount = null) {
   let countText;
   
@@ -911,73 +1068,6 @@ function updateShopCount(shopsDisplayed = null, categoryCount = null, visitedExt
   }
   
   document.getElementById("shops-nearby").textContent = countText;
-}
-
-function updateShopMarkers(shops) {
-  console.log(`🗺️ Aggiornando marker per ${shops.length} negozi`);
-  
-  // Clear existing markers
-  shopsMarkers.forEach(marker => {
-    if (marker._map) map.removeLayer(marker);
-  });
-  shopsMarkers = [];
-  
-  // Add new markers
-  shops.forEach(shop => {
-    // Controlla se questo negozio è stato visitato
-    const isVisited = visitedShops.some(v => v.shop_id === shop.id);
-    
-    // Choose icon based on visited status or category
-    let iconUrl = "https://maps.google.com/mapfiles/ms/icons/red.png";
-    
-    if (isVisited) {
-      // 🟢 VISITATO: usa sempre marker verde (priorità massima)
-      iconUrl = "https://maps.google.com/mapfiles/ms/icons/green.png";
-    } else {
-      // Non visitato: usa colori per categoria
-      const category = shop.category ? shop.category.toLowerCase() : "";
-      
-      // Trova la categoria principale
-      let mainCategory = "casa"; // default
-      for (const [key, values] of Object.entries(categoryMapping)) {
-        if (key === "all") continue;
-        if (values.some(val => category.includes(val) || val.includes(category))) {
-          mainCategory = key;
-          break;
-        }
-      }
-      
-      iconUrl = categoryIcons[mainCategory] || "https://maps.google.com/mapfiles/ms/icons/red.png";
-    }
-    
-    const shopIcon = L.icon({
-      iconUrl: iconUrl,
-      iconSize: [32, 32],
-      iconAnchor: [16, 32],
-      popupAnchor: [0, -32]
-    });
-    
-    // Popup content con indicazione se visitato
-    let popupContent = `
-      <div class="custom-popup">
-        <div class="popup-header ${isVisited ? 'visited' : ''}">${shop.name || shop.shop_name}</div>
-        <div class="popup-content">
-          ${isVisited ? '<div class="visited-badge">✅ Visitato!</div>' : ''}
-          <div>Categoria: ${shop.category}</div>
-          <div>ID: ${shop.id}</div>
-          ${shop.distance ? `<div>Distanza: ${(shop.distance * 1000).toFixed(0)}m</div>` : ''}
-        </div>
-      </div>
-    `;
-    
-    const marker = L.marker([shop.lat, shop.lon], { icon: shopIcon })
-      .bindPopup(popupContent);
-    
-    marker.addTo(map);
-    shopsMarkers.push(marker);
-  });
-  
-  console.log(`✅ Marker aggiornati: ${shopsMarkers.length} marker sulla mappa`);
 }
 
 function findClosestShop(position) {
