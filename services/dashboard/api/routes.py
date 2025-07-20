@@ -2,6 +2,7 @@
 Router per le API dashboard utente.
 """
 import logging
+import random
 from typing import List, Optional
 from datetime import datetime, timedelta
 
@@ -174,3 +175,167 @@ async def get_user_promotions(
         })
         
     return {"promotions": result}
+
+@router.get("/shops/inArea")
+async def get_shops_in_area(
+    n: float = Query(..., description="Latitudine nord"),
+    s: float = Query(..., description="Latitudine sud"), 
+    e: float = Query(..., description="Longitudine est"),
+    w: float = Query(..., description="Longitudine ovest"),
+    current_user: dict = Depends(get_current_user),
+    ch_client: CHClient = Depends(get_clickhouse_client)
+):
+    """
+    Recupera tutti i negozi nell'area visibile della mappa.
+    
+    Args:
+        n: Latitudine nord del bounding box
+        s: Latitudine sud del bounding box
+        e: Longitudine est del bounding box
+        w: Longitudine ovest del bounding box
+        current_user: Utente autenticato
+        ch_client: Client ClickHouse
+        
+    Returns:
+        List: Lista negozi nell'area specificata
+    """
+    try:
+        # Prima prova a cercare nella tabella shops se esiste
+        shops_query = """
+            SELECT 
+                shop_id as id,
+                shop_name,
+                category,
+                latitude as lat,
+                longitude as lon
+            FROM shops 
+            WHERE latitude BETWEEN %(south)s AND %(north)s
+              AND longitude BETWEEN %(west)s AND %(east)s
+            ORDER BY shop_name
+            LIMIT 500
+        """
+        
+        try:
+            rows = ch_client.execute(shops_query, {
+                "north": n,
+                "south": s, 
+                "east": e,
+                "west": w
+            })
+            
+            if rows:
+                shops = []
+                for row in rows:
+                    shops.append({
+                        "id": row[0],
+                        "shop_name": row[1],
+                        "category": row[2], 
+                        "lat": row[3],
+                        "lon": row[4]
+                    })
+                    
+                logger.info(f"Trovati {len(shops)} negozi nella tabella shops per area [{s},{w}] -> [{n},{e}]")
+                return shops
+        except Exception as e:
+            logger.warning(f"Tabella shops non disponibile: {e}")
+        
+        # Se la tabella shops non esiste, prova con user_events 
+        events_query = """
+            SELECT DISTINCT
+                toUInt32(cityHash64(poi_name)) as id,
+                poi_name as shop_name,
+                'convenience' as category,
+                argMax(latitude, event_time) as lat,
+                argMax(longitude, event_time) as lon
+            FROM user_events
+            WHERE latitude BETWEEN %(south)s AND %(north)s
+              AND longitude BETWEEN %(west)s AND %(east)s
+              AND poi_name != ''
+            GROUP BY poi_name
+            ORDER BY poi_name
+            LIMIT 200
+        """
+        
+        try:
+            rows = ch_client.execute(events_query, {
+                "north": n,
+                "south": s, 
+                "east": e,
+                "west": w
+            })
+            
+            if rows:
+                shops = []
+                for row in rows:
+                    shops.append({
+                        "id": row[0],
+                        "shop_name": row[1],
+                        "category": row[2], 
+                        "lat": row[3],
+                        "lon": row[4]
+                    })
+                    
+                logger.info(f"Trovati {len(shops)} POI dalla tabella user_events per area [{s},{w}] -> [{n},{e}]")
+                return shops
+        except Exception as e:
+            logger.warning(f"Impossibile recuperare POI da user_events: {e}")
+        
+        # Fallback: genera dati di esempio
+        logger.info("Generando dati di fallback per l'area richiesta")
+        return generate_fallback_shops_data(n, s, e, w)
+        
+    except Exception as e:
+        logger.error(f"Errore generale nel recupero negozi in area: {e}")
+        return generate_fallback_shops_data(n, s, e, w)
+
+
+def generate_fallback_shops_data(north: float, south: float, east: float, west: float) -> List[dict]:
+    """
+    Genera dati di esempio per negozi nell'area specificata.
+    Utile quando il database non ha dati reali.
+    """
+    # Categorie più comuni dal database reale (dal paste.txt fornito)
+    categories = [
+        "clothes", "hairdresser", "supermarket", "bakery", "car_repair",
+        "beauty", "convenience", "jewelry", "newsagent", "car", 
+        "florist", "furniture", "shoes", "optician", "pastry",
+        "tobacco", "kiosk", "butcher", "laundry", "stationery",
+        "greengrocer", "books", "dry_cleaning", "mobile_phone",
+        "bicycle", "travel_agency", "hardware", "pet", "houseware",
+        "electronics", "wine", "chemist", "copyshop", "perfumery"
+    ]
+    
+    # Nomi di negozi tipici italiani
+    shop_names = [
+        "Il Fornaio", "Bella Vista", "La Boutique", "Casa Moderna", 
+        "Il Gioiello", "Profumi & Co", "TechStore", "Auto Service",
+        "Farmacia Centrale", "Bar Italia", "Pizzeria Napoli", "Libreria Dante",
+        "Ottica Milano", "Scarpe & Style", "Il Parrucchiere", "Casa & Giardino",
+        "Alimentari Rossi", "Elettronica Plus", "Moda Italiana", "Sport Center"
+    ]
+    
+    shops = []
+    num_shops = min(25, len(shop_names))  # Massimo 25 negozi
+    
+    for i in range(num_shops):
+        # Coordinate casuali nell'area specifica
+        lat = south + random.random() * (north - south)
+        lon = west + random.random() * (east - west)
+        
+        category = random.choice(categories)
+        shop_name = random.choice(shop_names)
+        
+        # Rimuovi il nome scelto per evitare duplicati
+        if shop_name in shop_names:
+            shop_names.remove(shop_name)
+        
+        shops.append({
+            "id": i + 1,
+            "shop_name": f"{shop_name} ({category.replace('_', ' ').title()})",
+            "category": category,
+            "lat": lat,
+            "lon": lon
+        })
+    
+    logger.info(f"Generati {len(shops)} negozi di fallback nell'area [{south},{west}] -> [{north},{east}]")
+    return shops

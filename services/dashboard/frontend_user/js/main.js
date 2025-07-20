@@ -15,6 +15,8 @@ let userData = null;
 let notificationsPage = 0;
 let isLoadingMoreNotifications = false;
 let lazyLoadObserver = null;
+let isMapInitialized = false;
+let isDataLoaded = false;
 
 // WebSocket variables
 let websocket = null;
@@ -29,6 +31,29 @@ const DEFAULT_USER_PROFILE = {
   age: "--",
   profession: "--",
   interests: "--"
+};
+
+// MAPPATURA CATEGORIE AGGIORNATA BASATA SUI DATI REALI
+const categoryMapping = {
+  "all": "all",
+  "abbigliamento": ["clothes", "shoes", "jewelry", "bag", "fashion_accessories", "boutique", "tailor"],
+  "parrucchiere": ["hairdresser", "hairdresser_supply", "beauty", "cosmetics", "perfumery", "massage"],
+  "supermercato": ["supermarket", "convenience", "minimarket", "greengrocer", "butcher"],
+  "cibo": ["bakery", "pastry", "deli", "confectionery", "seafood", "cheese", "frozen_food", "tea", "coffee", "ice_cream", "chocolate", "wine", "alcohol", "beverages"],
+  "auto": ["car_repair", "car", "car_parts", "motorcycle", "motorcycle_repair", "motorcycle_parts", "tyres", "bicycle"],
+  "bellezza": ["beauty", "cosmetics", "perfumery", "massage", "tattoo", "erotic", "wellness"],
+  "casa": ["furniture", "houseware", "interior_decoration", "bathroom_furnishing", "kitchen", "curtain", "lighting", "carpet", "tiles", "doors", "windows", "paint", "hardware", "doityourself"]
+};
+
+// Mapping per icone categorie
+const categoryIcons = {
+  "abbigliamento": "https://maps.google.com/mapfiles/ms/icons/pink.png",
+  "parrucchiere": "https://maps.google.com/mapfiles/ms/icons/purple.png", 
+  "supermercato": "https://maps.google.com/mapfiles/ms/icons/blue.png",
+  "cibo": "https://maps.google.com/mapfiles/ms/icons/yellow.png",
+  "auto": "https://maps.google.com/mapfiles/ms/icons/orange.png",
+  "bellezza": "https://maps.google.com/mapfiles/ms/icons/ltblue.png",
+  "casa": "https://maps.google.com/mapfiles/ms/icons/red.png"
 };
 
 // DOM Elements
@@ -48,6 +73,8 @@ const localCache = {
 
 // Initialize
 document.addEventListener("DOMContentLoaded", function() {
+  console.log("DOM Content Loaded - Inizializzazione app");
+  
   // UI event handlers
   document.getElementById("btn").onclick = handleLogin;
   document.getElementById("logoutButton").onclick = handleLogout;
@@ -58,15 +85,7 @@ document.addEventListener("DOMContentLoaded", function() {
   document.getElementById("load-more-notifications").onclick = loadMoreNotifications;
   
   // Set up category filters
-  const categoryPills = document.querySelectorAll(".category-pill");
-  categoryPills.forEach(pill => {
-    pill.addEventListener("click", () => {
-      categoryPills.forEach(p => p.classList.remove("active"));
-      pill.classList.add("active");
-      categoryFilter = pill.dataset.category;
-      filterShopsByCategory();
-    });
-  });
+  setupCategoryFilters();
   
   // Set up Intersection Observer for lazy loading
   setupLazyLoadingObservers();
@@ -89,6 +108,29 @@ document.addEventListener("DOMContentLoaded", function() {
     }, 500);
   }
 });
+
+function setupCategoryFilters() {
+  const categoryPills = document.querySelectorAll(".category-pill");
+  categoryPills.forEach(pill => {
+    pill.addEventListener("click", () => {
+      console.log(`Filtro categoria selezionato: ${pill.dataset.category}`);
+      
+      // Aggiorna UI
+      categoryPills.forEach(p => p.classList.remove("active"));
+      pill.classList.add("active");
+      
+      // Aggiorna filtro
+      categoryFilter = pill.dataset.category;
+      
+      // Riapplica filtro solo se abbiamo dati
+      if (isDataLoaded && allShops.length > 0) {
+        filterShopsByCategory();
+      } else {
+        console.log("Dati non ancora caricati, filtro verrà applicato al caricamento");
+      }
+    });
+  });
+}
 
 function setupLazyLoadingObservers() {
   // Observer for lazy loading notifications
@@ -165,6 +207,8 @@ function handleLogin() {
 }
 
 function processLogin() {
+  console.log("Processando login...");
+  
   // Set welcome text and avatar
   welcomeText.textContent = `${username}`;
   userAvatar.textContent = username.charAt(0).toUpperCase();
@@ -186,6 +230,7 @@ function processLogin() {
   // Fallback to polling if WebSocket setup fails after 5 seconds
   setTimeout(() => {
     if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+      console.log("WebSocket non disponibile, fallback al polling");
       fallbackToPolling();
     }
   }, 5000);
@@ -213,6 +258,8 @@ function handleLogout() {
   notifications = [];
   notificationsPage = 0;
   visitedShops = [];  // Pulisci negozi visitati
+  isMapInitialized = false;
+  isDataLoaded = false;
   
   // Clear storage
   sessionStorage.removeItem("nearYouToken");
@@ -245,6 +292,8 @@ function toggleSidebar() {
 }
 
 function initMap() {
+  console.log("Inizializzazione mappa...");
+  
   map = L.map("map").setView([45.4642, 9.19], 15);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "© OpenStreetMap contributors"
@@ -262,21 +311,29 @@ function initMap() {
   // Force map size calculation
   setTimeout(() => {
     map.invalidateSize();
+    isMapInitialized = true;
+    console.log("Mappa inizializzata con successo");
+    
+    // Setup map event listeners for lazy loading
+    setupMapListeners();
   }, 300);
-  
-  // Setup map event listeners for lazy loading
-  setupMapListeners();
 }
 
 function setupMapListeners() {
+  console.log("Setup listeners mappa...");
+  
   // Lazy load shops when map view changes
   map.on('moveend', function() {
     console.log("Map view changed, loading shops for visible area");
-    fetchShopsInVisibleArea();
+    if (token && isMapInitialized) {
+      fetchShopsInVisibleArea();
+    }
   });
   
   // Also load shops when map is first initialized
-  fetchShopsInVisibleArea();
+  if (token && isMapInitialized) {
+    fetchShopsInVisibleArea();
+  }
 }
 
 function clearMap() {
@@ -438,6 +495,8 @@ function updateUserPosition(positionData) {
   const { latitude, longitude, message, user_id, visited_shops: visitedShopsData } = positionData;
   const latlng = [latitude, longitude];
   
+  console.log(`Aggiornamento posizione utente: [${latitude}, ${longitude}]`);
+  
   // Store position and update route
   currentPosition = latlng;
   routePoints.push(latlng);
@@ -460,7 +519,9 @@ function updateUserPosition(positionData) {
   if (visitedShopsData && visitedShopsData.length > 0) {
     visitedShops = visitedShopsData;
     // Riapplica i marker per mostrare quelli visitati in verde
-    filterShopsByCategory();
+    if (isDataLoaded) {
+      filterShopsByCategory();
+    }
     console.log(`Aggiornati ${visitedShopsData.length} negozi visitati`);
   }
   
@@ -672,7 +733,10 @@ async function fetchUserStats() {
 }
 
 async function fetchShopsInVisibleArea() {
-  if (!token || !map) return;
+  if (!token || !map || !isMapInitialized) {
+    console.log("Non posso caricare negozi: token, mappa o inizializzazione mancanti");
+    return;
+  }
   
   // Get current map bounds
   const bounds = map.getBounds();
@@ -690,6 +754,7 @@ async function fetchShopsInVisibleArea() {
   if (localCache.shopAreas[cacheKey]) {
     console.log("Using cached shops for this area");
     allShops = localCache.shopAreas[cacheKey];
+    isDataLoaded = true;
     filterShopsByCategory();
     return;
   }
@@ -723,15 +788,18 @@ async function fetchShopsInVisibleArea() {
     
     // Update the global shops array
     allShops = normalizedShops;
+    isDataLoaded = true;
     
     // Cache the results for this area
     localCache.shopAreas[cacheKey] = normalizedShops;
+    
+    console.log(`Caricati ${normalizedShops.length} negozi per l'area visibile`);
     
     // Update the map with the new shops
     filterShopsByCategory();
     
     // Update shop count
-    document.getElementById("shops-nearby").textContent = allShops.length;
+    updateShopCount();
     
   } catch (err) {
     console.error("Error fetching shops:", err);
@@ -739,37 +807,39 @@ async function fetchShopsInVisibleArea() {
 }
 
 function generateFallbackShopsInArea(area) {
-  const categories = ["ristorante", "bar", "abbigliamento", "supermercato", "elettronica"];
+  const categories = Object.keys(categoryMapping).filter(cat => cat !== "all");
   const shops = [];
   
-  // Generate 10 random shops within the visible area
-  for (let i = 1; i <= 10; i++) {
+  // Generate 15 random shops within the visible area
+  for (let i = 1; i <= 15; i++) {
     const lat = area.south + (Math.random() * (area.north - area.south));
     const lon = area.west + (Math.random() * (area.east - area.west));
     
+    const categoryName = categories[Math.floor(Math.random() * categories.length)];
+    const realCategories = categoryMapping[categoryName];
+    const realCategory = realCategories[Math.floor(Math.random() * realCategories.length)];
+    
     shops.push({
       id: i,
-      shop_name: `Negozio ${i}`,
-      category: categories[Math.floor(Math.random() * categories.length)],
+      shop_name: `${categoryName.charAt(0).toUpperCase() + categoryName.slice(1)} ${i}`,
+      category: realCategory,
       lat: lat,
       lon: lon
     });
   }
   
+  console.log("Generated fallback shops:", shops);
   return shops;
 }
 
 function filterShopsByCategory() {
-  // Mappa CORRETTA basata sui dati reali del database
-  const categoryMapping = {
-    "all": "all",
-    "ristorante": ["food", "frozen_food", "seafood", "health_food", "bakery", "pastry"],
-    "bar": ["convenience", "kiosk", "newsagent"], // Approssimazione - non ci sono bar nel DB
-    "abbigliamento": ["clothes", "shoes", "jewelry"],
-    "supermercato": ["supermarket", "convenience"],
-    "elettronica": ["electronics", "computer", "mobile_phone"], // Potrebbero non esserci
-    "farmacia": ["pharmacy", "chemist"] // Potrebbero non esserci
-  };
+  if (!isDataLoaded || allShops.length === 0) {
+    console.log("Impossibile filtrare: dati non ancora caricati");
+    return;
+  }
+  
+  console.log(`Applicando filtro categoria: ${categoryFilter}`);
+  console.log(`Totale negozi disponibili: ${allShops.length}`);
   
   // Filter shops by selected category
   let filteredShops = [...allShops];
@@ -789,7 +859,6 @@ function filterShopsByCategory() {
       });
     });
     
-    // Debug log con dati reali
     console.log(`Filtro "${categoryFilter}": trovati ${filteredShops.length}/${allShops.length} negozi`);
     console.log('Categorie target:', targetCategories);
     console.log('Categorie matchate:', [...new Set(filteredShops.map(s => s.category))]);
@@ -799,17 +868,26 @@ function filterShopsByCategory() {
   updateShopMarkers(filteredShops);
   
   // Update count in UI
+  updateShopCount(filteredShops);
+}
+
+function updateShopCount(filteredShops = null) {
+  const shopsToCount = filteredShops || allShops;
+  
   const visitedCount = visitedShops.filter(v => 
-    filteredShops.some(shop => shop.id === v.shop_id)
+    shopsToCount.some(shop => shop.id === v.shop_id)
   ).length;
   
   const countText = visitedCount > 0 ? 
-    `${filteredShops.length} (${visitedCount} visitati)` : 
-    filteredShops.length.toString();
+    `${shopsToCount.length} (${visitedCount} visitati)` : 
+    shopsToCount.length.toString();
+  
   document.getElementById("shops-nearby").textContent = countText;
 }
 
 function updateShopMarkers(shops) {
+  console.log(`Aggiornando marker per ${shops.length} negozi`);
+  
   // Clear existing markers
   shopsMarkers.forEach(marker => {
     if (marker._map) map.removeLayer(marker);
@@ -831,25 +909,17 @@ function updateShopMarkers(shops) {
       // Non visitato: usa colori per categoria
       const category = shop.category ? shop.category.toLowerCase() : "";
       
-      if (category.includes("restaurant") || category.includes("food") || 
-          category.includes("cafe") || category.includes("pizza")) {
-        iconUrl = "https://maps.google.com/mapfiles/ms/icons/yellow.png";
-      } else if (category.includes("bar") || category.includes("pub") || 
-                 category.includes("coffee") || category.includes("drinks")) {
-        iconUrl = "https://maps.google.com/mapfiles/ms/icons/orange.png";
-      } else if (category.includes("clothes") || category.includes("fashion") || 
-                 category.includes("boutique") || category.includes("shoes")) {
-        iconUrl = "https://maps.google.com/mapfiles/ms/icons/pink.png";
-      } else if (category.includes("supermarket") || category.includes("grocery") || 
-                 category.includes("convenience") || category.includes("market")) {
-        iconUrl = "https://maps.google.com/mapfiles/ms/icons/blue.png";
-      } else if (category.includes("electronics") || category.includes("computer") || 
-                 category.includes("mobile_phone") || category.includes("tech")) {
-        iconUrl = "https://maps.google.com/mapfiles/ms/icons/purple.png";
-      } else if (category.includes("pharmacy") || category.includes("chemist") || 
-                 category.includes("health") || category.includes("medical")) {
-        iconUrl = "https://maps.google.com/mapfiles/ms/icons/green.png";
+      // Trova la categoria principale
+      let mainCategory = "casa"; // default
+      for (const [key, values] of Object.entries(categoryMapping)) {
+        if (key === "all") continue;
+        if (values.some(val => category.includes(val) || val.includes(category))) {
+          mainCategory = key;
+          break;
+        }
       }
+      
+      iconUrl = categoryIcons[mainCategory] || "https://maps.google.com/mapfiles/ms/icons/red.png";
     }
     
     const shopIcon = L.icon({
@@ -877,6 +947,8 @@ function updateShopMarkers(shops) {
     marker.addTo(map);
     shopsMarkers.push(marker);
   });
+  
+  console.log(`Marker aggiornati: ${shopsMarkers.length} marker sulla mappa`);
 }
 
 function findClosestShop(position) {
