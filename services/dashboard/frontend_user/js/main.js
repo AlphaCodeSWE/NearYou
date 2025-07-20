@@ -110,6 +110,7 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 
 function setupCategoryFilters() {
+  console.log("Setup filtri categorie");
   const categoryPills = document.querySelectorAll(".category-pill");
   categoryPills.forEach(pill => {
     pill.addEventListener("click", () => {
@@ -332,6 +333,7 @@ function setupMapListeners() {
   
   // Also load shops when map is first initialized
   if (token && isMapInitialized) {
+    console.log("Caricamento iniziale negozi");
     fetchShopsInVisibleArea();
   }
 }
@@ -734,7 +736,11 @@ async function fetchUserStats() {
 
 async function fetchShopsInVisibleArea() {
   if (!token || !map || !isMapInitialized) {
-    console.log("Non posso caricare negozi: token, mappa o inizializzazione mancanti");
+    console.log("Non posso caricare negozi: token, mappa o inizializzazione mancanti", {
+      token: !!token,
+      map: !!map,
+      initialized: isMapInitialized
+    });
     return;
   }
   
@@ -762,8 +768,8 @@ async function fetchShopsInVisibleArea() {
   try {
     console.log("Fetching shops for visible area:", visibleArea);
     
-    // Try to fetch shops from the API
-    const res = await fetch(`/api/shops/inArea?n=${visibleArea.north}&s=${visibleArea.south}&e=${visibleArea.east}&w=${visibleArea.west}`, {
+    // ✅ PATH CORRETTO CON /user/
+    const res = await fetch(`/api/user/shops/inArea?n=${visibleArea.north}&s=${visibleArea.south}&e=${visibleArea.east}&w=${visibleArea.west}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     
