@@ -833,57 +833,49 @@ function generateFallbackShopsInArea(area) {
 }
 
 function filterShopsByCategory() {
-  // Mappa categorie italiane (filtri UI) a categorie inglesi (database)
+  // Mappa filtri UI (italiano) → categorie database (inglese/Overpass)
   const categoryMapping = {
     "all": "all",
-    "ristorante": "restaurant",
-    "bar": "bar", 
-    "abbigliamento": "clothes",
-    "supermercato": "supermarket",
-    "elettronica": "electronics",
-    "farmacia": "pharmacy",
-    "libreria": "books",
-    "gelateria": "ice_cream",
-    "parrucchiere": "hairdresser",
-    "palestra": "fitness"
+    "ristorante": ["restaurant", "food", "cafe", "pizza", "italian"],
+    "bar": ["bar", "cafe", "pub", "coffee", "drinks"],
+    "abbigliamento": ["clothes", "fashion", "boutique", "clothing", "shoes"],
+    "supermercato": ["supermarket", "grocery", "convenience", "food"],
+    "elettronica": ["electronics", "computer", "mobile_phone", "tech"],
+    "farmacia": ["pharmacy", "chemist", "health"]
   };
-  
-  // Converti filtro selezionato in categoria database
-  const dbCategory = categoryMapping[categoryFilter] || categoryFilter;
   
   // Filter shops by selected category
   let filteredShops = [...allShops];
   
-  if (dbCategory !== "all") {
+  if (categoryFilter !== "all") {
+    const targetCategories = categoryMapping[categoryFilter] || [categoryFilter];
+    
     filteredShops = allShops.filter(shop => {
-      // Normalizza categoria negozio per matching flessibile
+      if (!shop.category) return false;
+      
       const shopCategory = shop.category.toLowerCase().trim();
       
-      // Match esatto o parziale per categorie comuni
-      if (dbCategory === "restaurant") {
-        return shopCategory.includes("restaurant") || shopCategory.includes("food") || shopCategory.includes("ristorante");
-      } else if (dbCategory === "clothes") {
-        return shopCategory.includes("clothes") || shopCategory.includes("fashion") || shopCategory.includes("abbigliamento");
-      } else if (dbCategory === "supermarket") {
-        return shopCategory.includes("supermarket") || shopCategory.includes("grocery") || shopCategory.includes("supermercato");
-      } else if (dbCategory === "electronics") {
-        return shopCategory.includes("electronics") || shopCategory.includes("computer") || shopCategory.includes("elettronica");
-      } else if (dbCategory === "pharmacy") {
-        return shopCategory.includes("pharmacy") || shopCategory.includes("farmacia");
-      } else if (dbCategory === "hairdresser") {
-        return shopCategory.includes("hairdresser") || shopCategory.includes("beauty") || shopCategory.includes("parrucchiere");
-      } else {
-        // Match diretto per altre categorie
-        return shopCategory === dbCategory || shopCategory.includes(dbCategory);
-      }
+      // Verifica se la categoria del negozio match con una delle categorie target
+      return targetCategories.some(target => {
+        return shopCategory === target || 
+               shopCategory.includes(target) ||
+               target.includes(shopCategory);
+      });
     });
+    
+    // Debug log
+    console.log(`Filtro "${categoryFilter}": trovati ${filteredShops.length}/${allShops.length} negozi`);
+    console.log('Categorie trovate:', [...new Set(filteredShops.map(s => s.category))]);
   }
   
   // Update shop markers on the map
   updateShopMarkers(filteredShops);
   
   // Update count in UI
-  const visitedCount = visitedShops.length;
+  const visitedCount = visitedShops.filter(v => 
+    filteredShops.some(shop => shop.id === v.shop_id)
+  ).length;
+  
   const countText = visitedCount > 0 ? 
     `${filteredShops.length} (${visitedCount} visitati)` : 
     filteredShops.length.toString();
