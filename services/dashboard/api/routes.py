@@ -186,156 +186,151 @@ async def get_shops_in_area(
     ch_client: CHClient = Depends(get_clickhouse_client)
 ):
     """
-    Recupera tutti i negozi nell'area visibile della mappa.
-    
-    Args:
-        n: Latitudine nord del bounding box
-        s: Latitudine sud del bounding box
-        e: Longitudine est del bounding box
-        w: Longitudine ovest del bounding box
-        current_user: Utente autenticato
-        ch_client: Client ClickHouse
-        
-    Returns:
-        List: Lista negozi nell'area specificata
+    Recupera tutti i POI/negozi nell'area visibile della mappa.
+    Estrae i POI unici dalla tabella user_events di ClickHouse.
     """
+    logger.info(f"🗺️ Richiesta negozi per area: [{s:.4f},{w:.4f}] -> [{n:.4f},{e:.4f}]")
+    
     try:
-        # Prima prova a cercare nella tabella shops se esiste
-        shops_query = """
+        # Estrai POI unici da user_events nell'area specificata
+        query = """
             SELECT 
-                shop_id as id,
-                shop_name,
-                category,
-                latitude as lat,
-                longitude as lon
-            FROM shops 
-            WHERE latitude BETWEEN %(south)s AND %(north)s
-              AND longitude BETWEEN %(west)s AND %(east)s
-            ORDER BY shop_name
-            LIMIT 500
-        """
-        
-        try:
-            rows = ch_client.execute(shops_query, {
-                "north": n,
-                "south": s, 
-                "east": e,
-                "west": w
-            })
-            
-            if rows:
-                shops = []
-                for row in rows:
-                    shops.append({
-                        "id": row[0],
-                        "shop_name": row[1],
-                        "category": row[2], 
-                        "lat": row[3],
-                        "lon": row[4]
-                    })
-                    
-                logger.info(f"Trovati {len(shops)} negozi nella tabella shops per area [{s},{w}] -> [{n},{e}]")
-                return shops
-        except Exception as e:
-            logger.warning(f"Tabella shops non disponibile: {e}")
-        
-        # Se la tabella shops non esiste, prova con user_events 
-        events_query = """
-            SELECT DISTINCT
-                toUInt32(cityHash64(poi_name)) as id,
+                cityHash64(poi_name) as id,
                 poi_name as shop_name,
                 'convenience' as category,
                 argMax(latitude, event_time) as lat,
-                argMax(longitude, event_time) as lon
+                argMax(longitude, event_time) as lon,
+                count() as visit_count
             FROM user_events
             WHERE latitude BETWEEN %(south)s AND %(north)s
               AND longitude BETWEEN %(west)s AND %(east)s
               AND poi_name != ''
+              AND poi_name IS NOT NULL
             GROUP BY poi_name
-            ORDER BY poi_name
+            HAVING lat BETWEEN %(south)s AND %(north)s
+               AND lon BETWEEN %(west)s AND %(east)s
+            ORDER BY visit_count DESC, poi_name
             LIMIT 200
         """
         
-        try:
-            rows = ch_client.execute(events_query, {
-                "north": n,
-                "south": s, 
-                "east": e,
-                "west": w
-            })
+        rows = ch_client.execute(query, {
+            "north": n,
+            "south": s, 
+            "east": e,
+            "west": w
+        })
+        
+        if rows:
+            shops = []
+            # Mappa semplice per assegnare categorie basate sul nome
+            category_mapping = {
+                'supermercato': 'supermarket',
+                'market': 'supermarket', 
+                'esselunga': 'supermarket',
+                'coop': 'supermarket',
+                'carrefour': 'supermarket',
+                'bar': 'convenience',
+                'caffè': 'convenience',
+                'cafe': 'convenience',
+                'ristorante': 'bakery',
+                'pizzeria': 'bakery',
+                'trattoria': 'bakery',
+                'farmacia': 'chemist',
+                'pharmacy': 'chemist',
+                'banca': 'convenience',
+                'bank': 'convenience',
+                'negozio': 'clothes',
+                'store': 'clothes',
+                'shop': 'clothes',
+                'parrucchiere': 'hairdresser',
+                'hair': 'hairdresser',
+                'beauty': 'beauty',
+                'bellezza': 'beauty',
+                'chiesa': 'convenience',
+                'church': 'convenience',
+                'scuola': 'convenience',
+                'school': 'convenience',
+                'ospedale': 'convenience',
+                'hospital': 'convenience',
+                'ufficio': 'convenience',
+                'office': 'convenience'
+            }
             
-            if rows:
-                shops = []
-                for row in rows:
-                    shops.append({
-                        "id": row[0],
-                        "shop_name": row[1],
-                        "category": row[2], 
-                        "lat": row[3],
-                        "lon": row[4]
-                    })
-                    
-                logger.info(f"Trovati {len(shops)} POI dalla tabella user_events per area [{s},{w}] -> [{n},{e}]")
-                return shops
-        except Exception as e:
-            logger.warning(f"Impossibile recuperare POI da user_events: {e}")
-        
-        # Fallback: genera dati di esempio
-        logger.info("Generando dati di fallback per l'area richiesta")
-        return generate_fallback_shops_data(n, s, e, w)
-        
+            for row in rows:
+                poi_name = row[1].lower()
+                
+                # Determina categoria in base al nome
+                category = 'convenience'  # default
+                for keyword, cat in category_mapping.items():
+                    if keyword in poi_name:
+                        category = cat
+                        break
+                
+                shops.append({
+                    "id": int(row[0]) if row[0] else hash(row[1]) & 0x7FFFFFFF,
+                    "shop_name": row[1],
+                    "category": category,
+                    "lat": float(row[3]),
+                    "lon": float(row[4]),
+                    "visit_count": int(row[5])
+                })
+                
+            logger.info(f"✅ Trovati {len(shops)} POI da user_events nell'area [{s:.4f},{w:.4f}] -> [{n:.4f},{e:.4f}]")
+            return shops
+        else:
+            logger.info("⚠️ Nessun POI trovato in user_events per quest'area")
+            
     except Exception as e:
-        logger.error(f"Errore generale nel recupero negozi in area: {e}")
-        return generate_fallback_shops_data(n, s, e, w)
-
-
-def generate_fallback_shops_data(north: float, south: float, east: float, west: float) -> List[dict]:
-    """
-    Genera dati di esempio per negozi nell'area specificata.
-    Utile quando il database non ha dati reali.
-    """
-    # Categorie più comuni dal database reale (dal paste.txt fornito)
-    categories = [
-        "clothes", "hairdresser", "supermarket", "bakery", "car_repair",
-        "beauty", "convenience", "jewelry", "newsagent", "car", 
-        "florist", "furniture", "shoes", "optician", "pastry",
-        "tobacco", "kiosk", "butcher", "laundry", "stationery",
-        "greengrocer", "books", "dry_cleaning", "mobile_phone",
-        "bicycle", "travel_agency", "hardware", "pet", "houseware",
-        "electronics", "wine", "chemist", "copyshop", "perfumery"
-    ]
+        logger.error(f"❌ Errore query ClickHouse: {e}")
     
-    # Nomi di negozi tipici italiani
-    shop_names = [
-        "Il Fornaio", "Bella Vista", "La Boutique", "Casa Moderna", 
-        "Il Gioiello", "Profumi & Co", "TechStore", "Auto Service",
-        "Farmacia Centrale", "Bar Italia", "Pizzeria Napoli", "Libreria Dante",
-        "Ottica Milano", "Scarpe & Style", "Il Parrucchiere", "Casa & Giardino",
-        "Alimentari Rossi", "Elettronica Plus", "Moda Italiana", "Sport Center"
+    # Fallback: genera dati di test se non ci sono eventi
+    logger.info("🎲 Generando POI di fallback per l'area...")
+    return generate_fallback_pois(n, s, e, w)
+
+
+def generate_fallback_pois(north: float, south: float, east: float, west: float) -> List[dict]:
+    """
+    Genera POI di esempio quando user_events è vuoto.
+    Simula POI realistici per Milano.
+    """
+    # POI tipici di Milano con categorie reali dal tuo paste.txt
+    milano_pois = [
+        {"name": "Supermercato Esselunga", "category": "supermarket"},
+        {"name": "Parrucchiere Bella Vista", "category": "hairdresser"},
+        {"name": "Bar Centrale", "category": "convenience"},
+        {"name": "Ristorante Da Mario", "category": "bakery"},
+        {"name": "Farmacia San Carlo", "category": "chemist"},
+        {"name": "Negozio Abbigliamento Moda", "category": "clothes"},
+        {"name": "Panificio del Borgo", "category": "bakery"},
+        {"name": "Tabaccheria Giornali", "category": "newsagent"},
+        {"name": "Fioraio Le Rose", "category": "florist"},
+        {"name": "Ottica Milano", "category": "optician"},
+        {"name": "Gioielleria Luxury", "category": "jewelry"},
+        {"name": "Profumeria Douglas", "category": "beauty"},
+        {"name": "Libreria Mondadori", "category": "books"},
+        {"name": "Macelleria Qualità", "category": "butcher"},
+        {"name": "Lavanderia Express", "category": "laundry"},
+        {"name": "Cartoleria Office", "category": "stationery"},
+        {"name": "Elettronica TechStore", "category": "electronics"},
+        {"name": "Scarpe & Style", "category": "shoes"},
+        {"name": "Pasticceria Dolci", "category": "pastry"},
+        {"name": "Enoteca Vini Pregiati", "category": "wine"}
     ]
     
     shops = []
-    num_shops = min(25, len(shop_names))  # Massimo 25 negozi
-    
-    for i in range(num_shops):
-        # Coordinate casuali nell'area specifica
+    for i, poi in enumerate(milano_pois[:15]):  # Massimo 15 POI
+        # Coordinate casuali nell'area
         lat = south + random.random() * (north - south)
         lon = west + random.random() * (east - west)
         
-        category = random.choice(categories)
-        shop_name = random.choice(shop_names)
-        
-        # Rimuovi il nome scelto per evitare duplicati
-        if shop_name in shop_names:
-            shop_names.remove(shop_name)
-        
         shops.append({
-            "id": i + 1,
-            "shop_name": f"{shop_name} ({category.replace('_', ' ').title()})",
-            "category": category,
+            "id": i + 1000,  # ID alto per distinguere dal vero DB
+            "shop_name": poi["name"],
+            "category": poi["category"],
             "lat": lat,
-            "lon": lon
+            "lon": lon,
+            "visit_count": random.randint(1, 50)
         })
     
-    logger.info(f"Generati {len(shops)} negozi di fallback nell'area [{south},{west}] -> [{north},{east}]")
+    logger.info(f"✅ Generati {len(shops)} POI di fallback")
     return shops
