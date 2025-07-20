@@ -833,11 +833,50 @@ function generateFallbackShopsInArea(area) {
 }
 
 function filterShopsByCategory() {
+  // Mappa categorie italiane (filtri UI) a categorie inglesi (database)
+  const categoryMapping = {
+    "all": "all",
+    "ristorante": "restaurant",
+    "bar": "bar", 
+    "abbigliamento": "clothes",
+    "supermercato": "supermarket",
+    "elettronica": "electronics",
+    "farmacia": "pharmacy",
+    "libreria": "books",
+    "gelateria": "ice_cream",
+    "parrucchiere": "hairdresser",
+    "palestra": "fitness"
+  };
+  
+  // Converti filtro selezionato in categoria database
+  const dbCategory = categoryMapping[categoryFilter] || categoryFilter;
+  
   // Filter shops by selected category
   let filteredShops = [...allShops];
   
-  if (categoryFilter !== "all") {
-    filteredShops = allShops.filter(shop => shop.category === categoryFilter);
+  if (dbCategory !== "all") {
+    filteredShops = allShops.filter(shop => {
+      // Normalizza categoria negozio per matching flessibile
+      const shopCategory = shop.category.toLowerCase().trim();
+      
+      // Match esatto o parziale per categorie comuni
+      if (dbCategory === "restaurant") {
+        return shopCategory.includes("restaurant") || shopCategory.includes("food") || shopCategory.includes("ristorante");
+      } else if (dbCategory === "clothes") {
+        return shopCategory.includes("clothes") || shopCategory.includes("fashion") || shopCategory.includes("abbigliamento");
+      } else if (dbCategory === "supermarket") {
+        return shopCategory.includes("supermarket") || shopCategory.includes("grocery") || shopCategory.includes("supermercato");
+      } else if (dbCategory === "electronics") {
+        return shopCategory.includes("electronics") || shopCategory.includes("computer") || shopCategory.includes("elettronica");
+      } else if (dbCategory === "pharmacy") {
+        return shopCategory.includes("pharmacy") || shopCategory.includes("farmacia");
+      } else if (dbCategory === "hairdresser") {
+        return shopCategory.includes("hairdresser") || shopCategory.includes("beauty") || shopCategory.includes("parrucchiere");
+      } else {
+        // Match diretto per altre categorie
+        return shopCategory === dbCategory || shopCategory.includes(dbCategory);
+      }
+    });
   }
   
   // Update shop markers on the map
