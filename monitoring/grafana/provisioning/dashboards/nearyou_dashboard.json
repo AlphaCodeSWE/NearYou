@@ -41,13 +41,14 @@
                 "value": null
               }
             ]
-          }
+          },
+          "unit": "short"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 4,
-        "w": 12,
+        "w": 6,
         "x": 0,
         "y": 0
       },
@@ -101,14 +102,15 @@
                 "value": null
               }
             ]
-          }
+          },
+          "unit": "short"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 4,
-        "w": 12,
-        "x": 12,
+        "w": 6,
+        "x": 6,
         "y": 0
       },
       "id": 2,
@@ -150,6 +152,259 @@
       },
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "green",
+                "value": 50
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "ClickHouse"
+          },
+          "format": 1,
+          "queryType": "sql",
+          "rawSql": "SELECT ROUND(countIf(offer_accepted) / count() * 100, 1) as conversion_rate FROM nearyou.user_visits WHERE visit_start_time >= now() - INTERVAL 1 DAY",
+          "refId": "A"
+        }
+      ],
+      "title": "Conversion Rate %",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "ClickHouse"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyEUR"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "ClickHouse"
+          },
+          "format": 1,
+          "queryType": "sql",
+          "rawSql": "SELECT ROUND(SUM(estimated_spending), 2) as daily_revenue FROM nearyou.user_visits WHERE toDate(visit_start_time) = today()",
+          "refId": "A"
+        }
+      ],
+      "title": "Revenue Giornaliero",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 4
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(*) FROM offers WHERE is_active = true AND valid_until >= CURRENT_DATE",
+          "refId": "A"
+        }
+      ],
+      "title": "Offerte Attive",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "ClickHouse"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          },
+          "unit": "m"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 4
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "ClickHouse"
+          },
+          "format": 1,
+          "queryType": "sql",
+          "rawSql": "SELECT ROUND(AVG(duration_minutes), 1) as avg_duration FROM nearyou.user_visits WHERE visit_start_time >= now() - INTERVAL 7 DAY",
+          "refId": "A"
+        }
+      ],
+      "title": "Permanenza Media",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "ClickHouse"
+      },
+      "fieldConfig": {
+        "defaults": {
           "color": {"mode": "thresholds"},
           "custom": {
             "align": "auto",
@@ -163,15 +418,28 @@
             "steps": [{"color": "green", "value": null}]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "revenue"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyEUR"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
-        "w": 24,
-        "x": 0,
+        "w": 12,
+        "x": 12,
         "y": 4
       },
-      "id": 3,
+      "id": 7,
       "options": {
         "footer": {"enablePagination": true},
         "showHeader": true
@@ -184,11 +452,11 @@
           },
           "format": 1,
           "queryType": "sql",
-          "rawSql": "SELECT user_id, username, full_name, email, phone_number, password, user_type, gender, age, profession, interests, country, city, registration_time FROM nearyou.users",
+          "rawSql": "SELECT \n    shop_name,\n    COUNT(*) as visite,\n    ROUND(SUM(estimated_spending), 2) as revenue,\n    ROUND(AVG(duration_minutes), 1) as durata_media,\n    ROUND(countIf(offer_accepted) / count() * 100, 1) as conversion_rate\nFROM nearyou.user_visits \nWHERE visit_start_time >= now() - INTERVAL 7 DAY\nGROUP BY shop_name\nORDER BY revenue DESC\nLIMIT 10",
           "refId": "A"
         }
       ],
-      "title": "Lista Utenti",
+      "title": "Top Negozi Revenue (7 giorni)",
       "type": "table"
     },
     {
@@ -204,11 +472,81 @@
           "custom": {
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "Visite",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyEUR"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 8,
+      "options": {
+        "displayMode": "list",
+        "placement": "bottom",
+        "showLegend": true,
+        "values": ["value"]
+      },
+      "pluginVersion": "10.0.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "ClickHouse"
+          },
+          "format": 1,
+          "queryType": "sql",
+          "rawSql": "SELECT \n    shop_category,\n    ROUND(SUM(estimated_spending), 2) as revenue\nFROM nearyou.user_visits \nWHERE visit_start_time >= now() - INTERVAL 7 DAY\nGROUP BY shop_category\nORDER BY revenue DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Revenue per Categoria (7 giorni)",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "ClickHouse"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "drawStyle": "bars",
-            "fillOpacity": 50,
+            "drawStyle": "line",
+            "fillOpacity": 20,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -216,7 +554,7 @@
               "viz": false
             },
             "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineWidth": 2,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -242,24 +580,41 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "revenue"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyEUR"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 12
+        "y": 16
       },
-      "id": 4,
+      "id": 9,
       "options": {
         "legend": {
-          "calcs": ["sum"],
+          "calcs": ["sum", "mean"],
           "displayMode": "table",
-          "placement": "right",
+          "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
-          "mode": "single",
+          "mode": "multi",
           "sort": "none"
         }
       },
@@ -271,284 +626,12 @@
           },
           "format": 1,
           "queryType": "sql",
-          "rawSql": "SELECT \n    poi_name,\n    toStartOfHour(event_time) as time,\n    COUNT(*) as visits\nFROM nearyou.user_events\nWHERE event_time >= NOW() - INTERVAL 24 HOUR\nGROUP BY poi_name, time\nORDER BY time DESC, visits DESC\nLIMIT 100",
+          "rawSql": "SELECT\n    hour_of_day,\n    COUNT(*) as visite,\n    ROUND(SUM(estimated_spending), 2) as revenue\nFROM nearyou.user_visits\nWHERE visit_start_time >= now() - INTERVAL 7 DAY\nGROUP BY hour_of_day\nORDER BY hour_of_day",
           "refId": "A"
         }
       ],
-      "title": "Visite per Negozio (Ultimi 24 Ore)",
+      "title": "Trend Orario - Visite e Revenue (7 giorni)",
       "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "PostgreSQL"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 13,
-        "w": 24,
-        "x": 0,
-        "y": 20
-      },
-      "id": 5,
-      "options": {
-        "basemap": {
-          "config": {},
-          "name": "Layer 0",
-          "type": "default"
-        },
-        "controls": {
-          "mouseWheelZoom": true,
-          "showAttribution": true,
-          "showDebug": false,
-          "showMeasure": false,
-          "showScale": true,
-          "showZoom": true
-        },
-        "layers": [
-          {
-            "config": {
-              "showLegend": true,
-              "style": {
-                "color": {
-                  "fixed": "dark-red"
-                },
-                "opacity": 1,
-                "rotation": {
-                  "fixed": 0,
-                  "max": 360,
-                  "min": -360,
-                  "mode": "mod"
-                },
-                "size": {
-                  "fixed": 10,
-                  "max": 15,
-                  "min": 5
-                },
-                "symbol": {
-                  "fixed": "img/icons/marker/circle.svg",
-                  "mode": "fixed"
-                },
-                "text": {
-                  "field": "shop_name",
-                  "fixed": "",
-                  "mode": "field"
-                }
-              }
-            },
-            "location": {
-              "latitude": "lat",
-              "longitude": "lon",
-              "mode": "coords"
-            },
-            "name": "Negozi Selezionati",
-            "tooltip": true,
-            "type": "markers"
-          }
-        ],
-        "tooltip": {
-          "mode": "details"
-        },
-        "view": {
-          "allLayers": true,
-          "id": "fit",
-          "lat": 45.45,
-          "lon": 9.19,
-          "zoom": 12
-        }
-      },
-      "pluginVersion": "10.0.3",
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "PostgreSQL"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawQuery": true,
-          "rawSql": "SELECT \n    shop_id, \n    shop_name, \n    category,\n    ST_Y(geom) as lat, \n    ST_X(geom) as lon \nFROM shops\nLIMIT 100",
-          "refId": "A"
-        }
-      ],
-      "title": "Mappa dei Negozi Selezionati",
-      "type": "geomap"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "ClickHouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 13,
-        "w": 24,
-        "x": 0,
-        "y": 33
-      },
-      "id": 6,
-      "options": {
-        "basemap": {
-          "config": {},
-          "name": "Layer 0",
-          "type": "default"
-        },
-        "controls": {
-          "mouseWheelZoom": true,
-          "showAttribution": true,
-          "showDebug": false,
-          "showMeasure": false,
-          "showScale": false,
-          "showZoom": true
-        },
-        "layers": [
-          {
-            "config": {
-              "showLegend": true,
-              "style": {
-                "color": {
-                  "fixed": "dark-green"
-                },
-                "opacity": 0.4,
-                "rotation": {
-                  "fixed": 0,
-                  "max": 360,
-                  "min": -360,
-                  "mode": "mod"
-                },
-                "size": {
-                  "fixed": 5,
-                  "max": 15,
-                  "min": 2
-                },
-                "symbol": {
-                  "fixed": "img/icons/marker/circle.svg",
-                  "mode": "fixed"
-                },
-                "text": {
-                  "field": "",
-                  "fixed": "",
-                  "mode": "fixed"
-                },
-                "textConfig": {
-                  "fontSize": 12,
-                  "offsetX": 0,
-                  "offsetY": 0,
-                  "textAlign": "center",
-                  "textBaseline": "middle"
-                }
-              }
-            },
-            "location": {
-              "latitude": "latitude",
-              "longitude": "longitude",
-              "mode": "coords"
-            },
-            "name": "Percorsi utenti",
-            "tooltip": true,
-            "type": "markers"
-          },
-          {
-            "config": {
-              "style": {
-                "color": {
-                  "field": "user_id",
-                  "fixed": "semi-dark-blue"
-                },
-                "lineWidth": {
-                  "fixed": 1
-                },
-                "opacity": 0.4
-              }
-            },
-            "location": {
-              "latitude": "latitude",
-              "longitude": "longitude",
-              "mode": "coords"
-            },
-            "name": "Percorsi",
-            "tooltip": true,
-            "type": "route"
-          }
-        ],
-        "tooltip": {
-          "mode": "details"
-        },
-        "view": {
-          "allLayers": true,
-          "id": "coords",
-          "lat": 45.45,
-          "lon": 9.2,
-          "zoom": 12
-        }
-      },
-      "pluginVersion": "10.0.3",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "ClickHouse"
-          },
-          "format": 1,
-          "queryType": "sql",
-          "rawSql": "SELECT\n    user_id,\n    event_time,\n    latitude,\n    longitude,\n    poi_name,\n    poi_range\nFROM nearyou.user_events\nWHERE event_time >= now() - INTERVAL 24 HOUR\nORDER BY user_id, event_time",
-          "refId": "A"
-        }
-      ],
-      "title": "Mappa dei Percorsi Utenti",
-      "type": "geomap"
     },
     {
       "datasource": {
@@ -563,7 +646,7 @@
           "custom": {
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "Visite Totali",
+            "axisLabel": "Conversion Rate %",
             "axisPlacement": "auto",
             "fillOpacity": 80,
             "gradientMode": "none",
@@ -586,7 +669,8 @@
                 "value": null
               }
             ]
-          }
+          },
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -594,9 +678,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 46
+        "y": 24
       },
-      "id": 7,
+      "id": 10,
       "options": {
         "barRadius": 0,
         "barWidth": 0.7,
@@ -626,18 +710,201 @@
           },
           "format": 1,
           "queryType": "sql",
-          "rawSql": "SELECT \n    poi_name,\n    COUNT(*) as total_visits\nFROM nearyou.user_events\nWHERE event_time >= NOW() - INTERVAL 24 HOUR\nGROUP BY poi_name\nORDER BY total_visits DESC\nLIMIT 10",
+          "rawSql": "SELECT \n    CASE \n        WHEN discount_percent < 10 THEN '< 10%'\n        WHEN discount_percent < 20 THEN '10-19%'\n        WHEN discount_percent < 30 THEN '20-29%'\n        WHEN discount_percent < 40 THEN '30-39%'\n        ELSE '40%+'\n    END as sconto_range,\n    ROUND(countIf(v.offer_accepted) / count() * 100, 1) as conversion_rate,\n    COUNT(*) as total_visits\nFROM nearyou.user_visits v\nJOIN (\n    SELECT shop_id, discount_percent \n    FROM postgres.near_you_shops.offers o\n    WHERE o.is_active = true\n) o ON v.shop_id = o.shop_id\nWHERE v.visit_start_time >= now() - INTERVAL 7 DAY\nGROUP BY sconto_range\nORDER BY sconto_range",
           "refId": "A"
         }
       ],
-      "title": "Top 10 Negozi Più Visitati (Ultime 24 Ore)",
+      "title": "Conversione per Livello Sconto",
       "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 100
+              },
+              {
+                "color": "orange",
+                "value": 500
+              },
+              {
+                "color": "red",
+                "value": 1000
+              }
+            ]
+          },
+          "unit": "currencyEUR"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "id": 11,
+      "options": {
+        "basemap": {
+          "config": {},
+          "name": "Layer 0",
+          "type": "default"
+        },
+        "controls": {
+          "mouseWheelZoom": true,
+          "showAttribution": true,
+          "showDebug": false,
+          "showMeasure": false,
+          "showScale": true,
+          "showZoom": true
+        },
+        "layers": [
+          {
+            "config": {
+              "showLegend": true,
+              "style": {
+                "color": {
+                  "field": "revenue",
+                  "fixed": "dark-green"
+                },
+                "opacity": 0.8,
+                "rotation": {
+                  "fixed": 0,
+                  "max": 360,
+                  "min": -360,
+                  "mode": "mod"
+                },
+                "size": {
+                  "field": "revenue",
+                  "fixed": 10,
+                  "max": 30,
+                  "min": 8
+                },
+                "symbol": {
+                  "fixed": "img/icons/marker/circle.svg",
+                  "mode": "fixed"
+                },
+                "text": {
+                  "field": "shop_name",
+                  "fixed": "",
+                  "mode": "field"
+                }
+              }
+            },
+            "location": {
+              "latitude": "lat",
+              "longitude": "lon", 
+              "mode": "coords"
+            },
+            "name": "Revenue Heatmap",
+            "tooltip": true,
+            "type": "markers"
+          }
+        ],
+        "tooltip": {
+          "mode": "details"
+        },
+        "view": {
+          "allLayers": true,
+          "id": "fit",
+          "lat": 45.45,
+          "lon": 9.19,
+          "zoom": 12
+        }
+      },
+      "pluginVersion": "10.0.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH shop_revenue AS (\n    SELECT \n        shop_id,\n        shop_name,\n        SUM(estimated_spending) as revenue,\n        COUNT(*) as total_visits\n    FROM clickhouse('clickhouse-server:9000', 'nearyou', 'user_visits', 'default', 'pwe@123@l@')\n    WHERE visit_start_time >= NOW() - INTERVAL '7 days'\n    GROUP BY shop_id, shop_name\n)\nSELECT \n    s.shop_id,\n    s.shop_name,\n    s.category,\n    ST_Y(s.geom) as lat,\n    ST_X(s.geom) as lon,\n    COALESCE(sr.revenue, 0) as revenue,\n    COALESCE(sr.total_visits, 0) as visits\nFROM shops s\nLEFT JOIN shop_revenue sr ON s.shop_id = sr.shop_id\nWHERE s.geom IS NOT NULL\nORDER BY sr.revenue DESC NULLS LAST\nLIMIT 200",
+          "refId": "A"
+        }
+      ],
+      "title": "Heatmap Geografica Revenue",
+      "type": "geomap"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "ClickHouse"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto",
+            "inspect": false,
+            "filterable": true
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"color": "green", "value": null}]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "id": 12,
+      "options": {
+        "footer": {"enablePagination": true},
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "ClickHouse"
+          },
+          "format": 1,
+          "queryType": "sql",
+          "rawSql": "SELECT user_id, username, full_name, email, phone_number, password, user_type, gender, age, profession, interests, country, city, registration_time FROM nearyou.users",
+          "refId": "A"
+        }
+      ],
+      "title": "Lista Utenti Completa",
+      "type": "table"
     }
   ],
   "refresh": "5s",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": ["nearyou", "tracking", "shops"],
+  "tags": ["nearyou", "tracking", "shops", "analytics", "revenue"],
   "templating": {
     "list": [
       {
@@ -663,11 +930,73 @@
         "skipUrlSync": false,
         "sort": 1,
         "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": ["Tutte"],
+          "value": ["$__all"]
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "definition": "SELECT DISTINCT category FROM shops ORDER BY category",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Categoria Negozio",
+        "multi": true,
+        "name": "shop_category",
+        "options": [],
+        "query": "SELECT DISTINCT category FROM shops ORDER BY category",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "ultimi 7 giorni",
+          "value": "now()-7d"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Periodo Analisi",
+        "multi": false,
+        "name": "time_range",
+        "options": [
+          {
+            "selected": false,
+            "text": "ultime 24 ore",
+            "value": "now()-1d"
+          },
+          {
+            "selected": false,
+            "text": "ultimi 3 giorni",
+            "value": "now()-3d"
+          },
+          {
+            "selected": true,
+            "text": "ultimi 7 giorni",
+            "value": "now()-7d"
+          },
+          {
+            "selected": false,
+            "text": "ultimi 30 giorni",
+            "value": "now()-30d"
+          }
+        ],
+        "query": "now()-1d, now()-3d, now()-7d, now()-30d",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
       }
     ]
   },
   "time": {
-    "from": "now-24h",
+    "from": "now-7d",
     "to": "now"
   },
   "timepicker": {
@@ -685,8 +1014,8 @@
     ]
   },
   "timezone": "",
-  "title": "NearYou - Dashboard Utente",
-  "uid": "nearyou-dashboard-v3",
+  "title": "NearYou - Dashboard Analytics Avanzata",
+  "uid": "nearyou-dashboard-analytics-v1",
   "version": 1,
   "weekStart": ""
 }
