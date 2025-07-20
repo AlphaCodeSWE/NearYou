@@ -3,9 +3,8 @@ let token = "";
 let username = "";
 let map, userMarker, userPopup, userPolyline;
 let shopsMarkers = [];
-let visitedShopsMarkers = [];  // NUOVO: Marker per negozi visitati
 let allShops = [];
-let visitedShops = [];  // NUOVO: Array negozi visitati
+let visitedShops = [];  // Array negozi visitati
 let currentPosition = null;
 let routePoints = [];
 let notifications = [];
@@ -213,7 +212,7 @@ function handleLogout() {
   clearMap();
   notifications = [];
   notificationsPage = 0;
-  visitedShops = [];  // NUOVO: Pulisci negozi visitati
+  visitedShops = [];  // Pulisci negozi visitati
   
   // Clear storage
   sessionStorage.removeItem("nearYouToken");
@@ -291,73 +290,9 @@ function clearMap() {
     });
     shopsMarkers = [];
     
-    // NUOVO: Clear visited shop markers
-    visitedShopsMarkers.forEach(marker => {
-      if (marker._map) map.removeLayer(marker);
-    });
-    visitedShopsMarkers = [];
-    
     // Reset route
     routePoints = [];
   }
-}
-
-// NUOVA FUNZIONE: Marca negozi visitati sulla mappa
-function updateVisitedShopsMarkers(visitedShopsData) {
-  // Clear existing visited markers
-  visitedShopsMarkers.forEach(marker => {
-    if (marker._map) map.removeLayer(marker);
-  });
-  visitedShopsMarkers = [];
-  
-  if (!visitedShopsData || visitedShopsData.length === 0) {
-    return;
-  }
-  
-  console.log(`Marcando ${visitedShopsData.length} negozi visitati sulla mappa`);
-  
-  visitedShopsData.forEach(visitedShop => {
-    // Trova il negozio corrispondente nella lista allShops per ottenere coordinate
-    const shop = allShops.find(s => s.id === visitedShop.shop_id);
-    if (!shop) {
-      console.warn(`Negozio visitato ${visitedShop.shop_id} non trovato nella mappa`);
-      return;
-    }
-    
-    // Crea icona verde con checkmark per negozi visitati
-    const visitedIcon = L.icon({
-      iconUrl: "https://maps.google.com/mapfiles/ms/icons/green-dot.png",
-      iconSize: [32, 32],
-      iconAnchor: [16, 32],
-      popupAnchor: [0, -32]
-    });
-    
-    // Overlay con checkmark
-    const checkmarkOverlay = L.divIcon({
-      className: 'visited-checkmark',
-      html: '✓',
-      iconSize: [16, 16],
-      iconAnchor: [8, 8]
-    });
-    
-    const visitedMarker = L.marker([shop.lat, shop.lon], { icon: visitedIcon })
-      .bindPopup(`
-        <div class="custom-popup">
-          <div class="popup-header">✅ ${visitedShop.shop_name}</div>
-          <div class="popup-content">
-            <div><strong>Visitato!</strong></div>
-            <div>Categoria: ${visitedShop.shop_category}</div>
-            <div>Ultima visita: ${new Date(visitedShop.last_visit).toLocaleString()}</div>
-          </div>
-        </div>
-      `);
-    
-    visitedMarker.addTo(map);
-    visitedShopsMarkers.push(visitedMarker);
-  });
-  
-  // Aggiorna il contatore nella UI
-  document.getElementById("shops-nearby").textContent = `${allShops.length} (${visitedShopsData.length} visitati)`;
 }
 
 // WebSocket setup and management
@@ -521,10 +456,11 @@ function updateUserPosition(positionData) {
     userPolyline.addTo(map);
   }
   
-  // NUOVO: Aggiorna negozi visitati se ci sono dati
+  // Aggiorna negozi visitati se ci sono dati
   if (visitedShopsData && visitedShopsData.length > 0) {
     visitedShops = visitedShopsData;
-    updateVisitedShopsMarkers(visitedShopsData);
+    // Riapplica i marker per mostrare quelli visitati in verde
+    filterShopsByCategory();
     console.log(`Aggiornati ${visitedShopsData.length} negozi visitati`);
   }
   
@@ -755,10 +691,6 @@ async function fetchShopsInVisibleArea() {
     console.log("Using cached shops for this area");
     allShops = localCache.shopAreas[cacheKey];
     filterShopsByCategory();
-    // NUOVO: Riapplica marker negozi visitati dopo reload shops
-    if (visitedShops.length > 0) {
-      updateVisitedShopsMarkers(visitedShops);
-    }
     return;
   }
   
@@ -798,11 +730,6 @@ async function fetchShopsInVisibleArea() {
     // Update the map with the new shops
     filterShopsByCategory();
     
-    // NUOVO: Riapplica marker negozi visitati dopo reload shops
-    if (visitedShops.length > 0) {
-      updateVisitedShopsMarkers(visitedShops);
-    }
-    
     // Update shop count
     document.getElementById("shops-nearby").textContent = allShops.length;
     
@@ -833,15 +760,15 @@ function generateFallbackShopsInArea(area) {
 }
 
 function filterShopsByCategory() {
-  // Mappa filtri UI (italiano) → categorie database (inglese/Overpass)
+  // Mappa completa filtri UI (italiano) → categorie database (inglese/Overpass)
   const categoryMapping = {
     "all": "all",
-    "ristorante": ["restaurant", "food", "cafe", "pizza", "italian"],
-    "bar": ["bar", "cafe", "pub", "coffee", "drinks"],
-    "abbigliamento": ["clothes", "fashion", "boutique", "clothing", "shoes"],
-    "supermercato": ["supermarket", "grocery", "convenience", "food"],
-    "elettronica": ["electronics", "computer", "mobile_phone", "tech"],
-    "farmacia": ["pharmacy", "chemist", "health"]
+    "ristorante": ["restaurant", "food", "cafe", "pizza", "italian", "fast_food", "pub"],
+    "bar": ["bar", "cafe", "pub", "coffee", "drinks", "beverages"],
+    "abbigliamento": ["clothes", "fashion", "boutique", "clothing", "shoes", "textile", "fabric"],
+    "supermercato": ["supermarket", "grocery", "convenience", "food", "market"],
+    "elettronica": ["electronics", "computer", "mobile_phone", "tech", "electrical"],
+    "farmacia": ["pharmacy", "chemist", "health", "medical"]
   };
   
   // Filter shops by selected category
@@ -882,7 +809,6 @@ function filterShopsByCategory() {
   document.getElementById("shops-nearby").textContent = countText;
 }
 
-
 function updateShopMarkers(shops) {
   // Clear existing markers
   shopsMarkers.forEach(marker => {
@@ -892,7 +818,7 @@ function updateShopMarkers(shops) {
   
   // Add new markers
   shops.forEach(shop => {
-    // NUOVO: Controlla se questo negozio è stato visitato
+    // Controlla se questo negozio è stato visitato
     const isVisited = visitedShops.some(v => v.shop_id === shop.id);
     
     // Choose icon based on visited status or category
@@ -903,12 +829,26 @@ function updateShopMarkers(shops) {
       iconUrl = "https://maps.google.com/mapfiles/ms/icons/green.png";
     } else {
       // Non visitato: usa colori per categoria
-      if (shop.category === "ristorante" || shop.category === "bar") {
+      const category = shop.category ? shop.category.toLowerCase() : "";
+      
+      if (category.includes("restaurant") || category.includes("food") || 
+          category.includes("cafe") || category.includes("pizza")) {
         iconUrl = "https://maps.google.com/mapfiles/ms/icons/yellow.png";
-      } else if (shop.category === "supermercato") {
+      } else if (category.includes("bar") || category.includes("pub") || 
+                 category.includes("coffee") || category.includes("drinks")) {
+        iconUrl = "https://maps.google.com/mapfiles/ms/icons/orange.png";
+      } else if (category.includes("clothes") || category.includes("fashion") || 
+                 category.includes("boutique") || category.includes("shoes")) {
+        iconUrl = "https://maps.google.com/mapfiles/ms/icons/pink.png";
+      } else if (category.includes("supermarket") || category.includes("grocery") || 
+                 category.includes("convenience") || category.includes("market")) {
         iconUrl = "https://maps.google.com/mapfiles/ms/icons/blue.png";
-      } else if (shop.category === "elettronica") {
+      } else if (category.includes("electronics") || category.includes("computer") || 
+                 category.includes("mobile_phone") || category.includes("tech")) {
         iconUrl = "https://maps.google.com/mapfiles/ms/icons/purple.png";
+      } else if (category.includes("pharmacy") || category.includes("chemist") || 
+                 category.includes("health") || category.includes("medical")) {
+        iconUrl = "https://maps.google.com/mapfiles/ms/icons/green.png";
       }
     }
     
@@ -922,11 +862,11 @@ function updateShopMarkers(shops) {
     // Popup content con indicazione se visitato
     let popupContent = `
       <div class="custom-popup">
-        <div class="popup-header">${shop.name}</div>
+        <div class="popup-header ${isVisited ? 'visited' : ''}">${shop.name}</div>
         <div class="popup-content">
+          ${isVisited ? '<div class="visited-badge">✅ Visitato!</div>' : ''}
           <div>Categoria: ${shop.category}</div>
           <div>ID: ${shop.id}</div>
-          ${isVisited ? '<div class="visited-badge">✅ Visitato!</div>' : ''}
         </div>
       </div>
     `;
@@ -938,8 +878,6 @@ function updateShopMarkers(shops) {
     shopsMarkers.push(marker);
   });
 }
-
-
 
 function findClosestShop(position) {
   if (!allShops || allShops.length === 0) return null;
