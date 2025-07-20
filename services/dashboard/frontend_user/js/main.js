@@ -324,7 +324,7 @@ function updateVisitedShopsMarkers(visitedShopsData) {
       return;
     }
     
-    // Crea icona speciale per negozi visitati (stella verde)
+    // Crea icona verde con checkmark per negozi visitati
     const visitedIcon = L.icon({
       iconUrl: "https://maps.google.com/mapfiles/ms/icons/green-dot.png",
       iconSize: [32, 32],
@@ -332,15 +332,15 @@ function updateVisitedShopsMarkers(visitedShopsData) {
       popupAnchor: [0, -32]
     });
     
-    // Crea marker con stella
-    const starIcon = L.divIcon({
-      className: 'visited-shop-marker',
-      html: '⭐',
-      iconSize: [20, 20],
-      iconAnchor: [10, 10]
+    // Overlay con checkmark
+    const checkmarkOverlay = L.divIcon({
+      className: 'visited-checkmark',
+      html: '✓',
+      iconSize: [16, 16],
+      iconAnchor: [8, 8]
     });
     
-    const visitedMarker = L.marker([shop.lat, shop.lon], { icon: starIcon })
+    const visitedMarker = L.marker([shop.lat, shop.lon], { icon: visitedIcon })
       .bindPopup(`
         <div class="custom-popup">
           <div class="popup-header">✅ ${visitedShop.shop_name}</div>

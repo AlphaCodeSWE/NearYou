@@ -184,6 +184,17 @@ async def _generate_message(conn: DatabaseConnections, user: Dict, shop: Dict) -
         response = await client.post(MESSAGE_GENERATOR_URL, json=payload)
         if response.status_code == 200:
             message = response.json()["message"]
+            
+            #  Fix per placeholder non sostituiti
+            message = message.replace("[Nome del Negozio", shop["shop_name"])
+            message = message.replace("Nome del Negozio", shop["shop_name"])
+            message = message.replace("{shop_name}", shop["shop_name"])
+            message = message.replace("{name}", shop["shop_name"])
+            
+            # Rimuovi eventuali bracket rimasti
+            import re
+            message = re.sub(r'\[.*?\]', shop["shop_name"], message)
+            
             # Cache result
             conn._message_cache[cache_key] = message
             return message
@@ -409,8 +420,8 @@ def write_to_clickhouse(item: Tuple[str, Dict], conn: DatabaseConnections) -> No
         )
         
         if event.get("poi_info"):
-            logger.info(f" Evento con messaggio salvato per user {key}")
+            logger.info(f"💬 Evento con messaggio salvato per user {key}")
         if event.get("visited_shop"):
-            logger.info(f" Visita simulata registrata per user {key}")
+            logger.info(f"🏪 Visita simulata registrata per user {key}")
     except Exception as e:
         logger.error(f"Errore scrittura ClickHouse: {e}")

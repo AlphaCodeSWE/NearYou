@@ -276,8 +276,8 @@ html, body {
 }
 
 /* NUOVO: Stili per marker negozi visitati */
-.visited-shop-marker {
-  background: var(--visited-color);
+.visited-checkmark {
+  background: #27ae60;
   border: 2px solid white;
   border-radius: 50%;
   box-shadow: 0 2px 6px rgba(0,0,0,0.3);
@@ -285,10 +285,12 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: bold;
-  text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
   animation: visitedPulse 2s ease-in-out infinite;
+  position: relative;
+  z-index: 1000;
 }
 
 @keyframes visitedPulse {
@@ -567,7 +569,7 @@ html, body {
   to { opacity: 1; transform: translate(-50%, 0); }
 }
 
-/*  Badge per conteggio negozi visitati nella sidebar */
+/* NUOVO: Badge per conteggio negozi visitati nella sidebar */
 .visited-count-badge {
   background: var(--visited-color);
   color: white;
@@ -578,7 +580,7 @@ html, body {
   display: inline-block;
 }
 
-/*  Animazione per nuove visite */
+/* NUOVO: Animazione per nuove visite */
 @keyframes newVisitHighlight {
   0% { background-color: var(--visited-color); }
   50% { background-color: rgba(46, 204, 113, 0.3); }
