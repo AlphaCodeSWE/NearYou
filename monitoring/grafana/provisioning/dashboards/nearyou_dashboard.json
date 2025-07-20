@@ -626,7 +626,7 @@
           },
           "format": 1,
           "queryType": "sql",
-          "rawSql": "SELECT\n    toDateTime(concat(toString(toDate(visit_start_time)), ' ', toString(hour_of_day), ':00:00')) as time,\n    hour_of_day,\n    COUNT(*) as visite,\n    ROUND(SUM(estimated_spending), 2) as revenue\nFROM nearyou.user_visits\nWHERE visit_start_time >= now() - INTERVAL 7 DAY\nGROUP BY hour_of_day\nORDER BY hour_of_day",
+          "rawSql": "SELECT\n    toDateTime(concat('2024-01-01 ', toString(hour_of_day), ':00:00')) as time,\n    hour_of_day,\n    COUNT(*) as visite,\n    ROUND(SUM(estimated_spending), 2) as revenue\nFROM nearyou.user_visits\nWHERE visit_start_time >= now() - INTERVAL 7 DAY\nGROUP BY hour_of_day\nORDER BY hour_of_day",
           "refId": "A"
         }
       ],
