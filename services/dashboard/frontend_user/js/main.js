@@ -838,7 +838,7 @@ function generateFallbackShopsInArea(area) {
   return shops;
 }
 
-// 🚀 FUNZIONE FILTRO AVANZATA: Minimo 50 negozi + Visitati sempre visibili
+// 🚀 FUNZIONE FILTRO CORRETTA: Solo categoria richiesta + visitati
 function filterShopsByCategory() {
   if (!isDataLoaded || allShops.length === 0) {
     console.log("Impossibile filtrare: dati non ancora caricati");
@@ -848,15 +848,18 @@ function filterShopsByCategory() {
   console.log(`🎯 Applicando filtro categoria: ${categoryFilter}`);
   console.log(`📊 Totale negozi disponibili: ${allShops.length}`);
   
-  // STEP 1: Trova negozi della categoria richiesta
-  let categoryShops = [];
+  let finalShops = [];
+  let categoryCount = 0;
   
   if (categoryFilter === "all") {
-    categoryShops = [...allShops];
+    // Se "Tutti", mostra tutti i negozi disponibili
+    finalShops = [...allShops];
+    categoryCount = allShops.length;
   } else {
+    // Se categoria specifica, mostra SOLO quella categoria
     const targetCategories = categoryMapping[categoryFilter] || [categoryFilter];
     
-    categoryShops = allShops.filter(shop => {
+    const categoryShops = allShops.filter(shop => {
       if (!shop.category) return false;
       
       const shopCategory = shop.category.toLowerCase().trim();
@@ -867,53 +870,30 @@ function filterShopsByCategory() {
                target.includes(shopCategory);
       });
     });
-  }
-  
-  // STEP 2: Aggiungi negozi visitati (SEMPRE visibili)
-  const visitedShopIds = visitedShops.map(v => v.shop_id);
-  const visitedShopsOnMap = allShops.filter(shop => 
-    visitedShopIds.includes(shop.id) && 
-    !categoryShops.some(filtered => filtered.id === shop.id) // Evita duplicati
-  );
-  
-  // STEP 3: 🎯 GARANTISCI MINIMO 50 NEGOZI
-  let finalShops = [...categoryShops, ...visitedShopsOnMap];
-  
-  if (finalShops.length < 50 && categoryFilter !== "all") {
-    console.log(`⚠️ Solo ${finalShops.length} negozi trovati, aggiungendo altri per raggiungere 50...`);
     
-    // Aggiungi negozi random di altre categorie per raggiungere 50
-    const remainingShops = allShops.filter(shop => 
-      !finalShops.some(final => final.id === shop.id)
+    categoryCount = categoryShops.length;
+    
+    // Aggiungi negozi visitati (SEMPRE visibili anche se fuori categoria)
+    const visitedShopIds = visitedShops.map(v => v.shop_id);
+    const visitedShopsOnMap = allShops.filter(shop => 
+      visitedShopIds.includes(shop.id) && 
+      !categoryShops.some(filtered => filtered.id === shop.id) // Evita duplicati
     );
     
-    // Ordina per vicinanza se abbiamo posizione utente
-    if (currentPosition && remainingShops.length > 0) {
-      remainingShops.forEach(shop => {
-        shop.distance = calculateHaversineDistance(
-          currentPosition[0], currentPosition[1],
-          shop.lat, shop.lon
-        );
-      });
-      remainingShops.sort((a, b) => a.distance - b.distance);
-    }
+    finalShops = [...categoryShops, ...visitedShopsOnMap];
     
-    // Aggiungi fino a raggiungere 50
-    const needed = Math.min(50 - finalShops.length, remainingShops.length);
-    finalShops = [...finalShops, ...remainingShops.slice(0, needed)];
+    if (visitedShopsOnMap.length > 0) {
+      console.log(`🟢 Negozi visitati sempre visibili:`, visitedShopsOnMap.map(s => s.name || s.shop_name));
+    }
   }
   
-  console.log(`✅ Filtro "${categoryFilter}": ${categoryShops.length} categoria + ${visitedShopsOnMap.length} visitati + ${finalShops.length - categoryShops.length - visitedShopsOnMap.length} extra = ${finalShops.length} totali`);
-  
-  if (visitedShopsOnMap.length > 0) {
-    console.log(`🟢 Negozi visitati sempre visibili:`, visitedShopsOnMap.map(s => s.name || s.shop_name));
-  }
+  console.log(`✅ Filtro "${categoryFilter}": ${categoryCount} della categoria + ${finalShops.length - categoryCount} visitati extra = ${finalShops.length} totali mostrati`);
   
   // Update shop markers on the map
   updateShopMarkers(finalShops);
   
-  // Update count in UI
-  updateShopCount(finalShops, categoryShops.length, visitedShopsOnMap.length);
+  // Update count in UI (passa il conteggio della categoria)
+  updateShopCount(finalShops, categoryCount);
 }
 
 // 📊 CONTEGGIO SEMPLICE - Solo il numero corrispondente al filtro
