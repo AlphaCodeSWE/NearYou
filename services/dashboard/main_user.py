@@ -65,7 +65,7 @@ async def root():
     """Reindirizza dalla radice del sito alla dashboard utente."""
     return RedirectResponse(url="/dashboard/user")
 
-# ─── Dashboard utente principale ────────────────────
+# ─── Dashboard utente principale ────────────────────────
 @app.get("/dashboard/user", response_class=HTMLResponse)
 async def user_dashboard():
     """Endpoint che serve la dashboard utente."""
@@ -113,6 +113,32 @@ class ConnectionManager:
 
 # Istanzia il connection manager per i WebSocket
 manager = ConnectionManager()
+
+def get_visited_shops(ch_client: CHClient, user_id: int) -> list:
+    """Recupera i negozi visitati dall'utente nelle ultime 24 ore."""
+    try:
+        result = ch_client.execute("""
+            SELECT DISTINCT shop_id, shop_name, shop_category,
+                   max(visit_start_time) as last_visit
+            FROM user_visits
+            WHERE user_id = %(user_id)s
+              AND visit_start_time >= now() - INTERVAL 24 HOUR
+            GROUP BY shop_id, shop_name, shop_category
+            ORDER BY last_visit DESC
+        """, {"user_id": user_id})
+        
+        return [
+            {
+                "shop_id": row[0],
+                "shop_name": row[1],
+                "shop_category": row[2],
+                "last_visit": row[3].isoformat() if row[3] else None
+            }
+            for row in result
+        ]
+    except Exception as e:
+        logger.error(f"Errore recupero negozi visitati per user {user_id}: {e}")
+        return []
 
 # ─── WebSocket per aggiornamenti posizione in tempo reale ───────────────────────────
 @app.websocket("/ws/positions")
@@ -192,7 +218,10 @@ async def websocket_positions(websocket: WebSocket):
                 r = rows[0]
                 time_str = r[4].strftime("%Y-%m-%d %H:%M:%S") if r[4] else None
                 
-                # Invia aggiornamento posizione
+                # NUOVA FUNZIONALITÀ: Recupera negozi visitati
+                visited_shops = get_visited_shops(ch, user_id)
+                
+                # Invia aggiornamento posizione con negozi visitati
                 await websocket.send_json({
                     "type": "position_update",
                     "data": {
@@ -200,7 +229,8 @@ async def websocket_positions(websocket: WebSocket):
                         "latitude": r[1],
                         "longitude": r[2],
                         "message": r[3] or None,
-                        "timestamp": time_str
+                        "timestamp": time_str,
+                        "visited_shops": visited_shops  # NUOVA: Lista negozi visitati
                     }
                 })
             

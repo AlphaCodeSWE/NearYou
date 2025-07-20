@@ -1,6 +1,7 @@
 """Operatori custom per Bytewax dataflow."""
 import asyncio
 import logging
+import random
 from typing import Dict, Any, Optional, Tuple, List
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
@@ -19,6 +20,21 @@ logger = logging.getLogger(__name__)
 
 # Soglia distanza per messaggi
 MAX_POI_DISTANCE = 200  # metri
+
+# Configurazione simulazione visite
+VISIT_PROBABILITY_BASE = 0.3  # 30% probabilità base
+VISIT_DURATION_RANGES = {
+    'ristorante': (15, 45),     # 15-45 minuti
+    'bar': (5, 20),             # 5-20 minuti
+    'supermercato': (10, 30),   # 10-30 minuti
+    'abbigliamento': (15, 40),  # 15-40 minuti
+    'elettronica': (20, 60),    # 20-60 minuti
+    'farmacia': (3, 10),        # 3-10 minuti
+    'libreria': (10, 30),       # 10-30 minuti
+    'gelateria': (5, 15),       # 5-15 minuti
+    'parrucchiere': (30, 90),   # 30-90 minuti
+    'palestra': (45, 120),      # 45-120 minuti
+}
 
 class DatabaseConnections:
     """Gestisce connessioni database con pattern singleton e pooling."""
@@ -160,7 +176,8 @@ async def _generate_message(conn: DatabaseConnections, user: Dict, shop: Dict) -
             "poi": {
                 "name": shop["shop_name"],
                 "category": shop["category"],
-                "description": f"Negozio a {shop['distance']:.0f}m di distanza"
+                "description": f"Negozio a {shop['distance']:.0f}m di distanza",
+                "shop_id": shop["shop_id"]  # Aggiunto per recuperare offerte
             }
         }
         
@@ -176,6 +193,131 @@ async def _generate_message(conn: DatabaseConnections, user: Dict, shop: Dict) -
     except Exception as e:
         logger.error(f"Errore generazione messaggio: {e}")
         return ""
+
+def _should_simulate_visit(user: Dict, shop: Dict, message: str) -> bool:
+    """Decide se simulare una visita al negozio."""
+    if not message or not message.strip():
+        return False
+    
+    # Probabilità base
+    probability = VISIT_PROBABILITY_BASE
+    
+    # Aumenta probabilità se c'è sconto nel messaggio
+    if "%" in message or "sconto" in message.lower() or "offerta" in message.lower():
+        probability += 0.3
+        
+        # Estrai percentuale sconto se presente
+        import re
+        discount_match = re.search(r'(\d+)%', message)
+        if discount_match:
+            discount = int(discount_match.group(1))
+            # Più sconto = più probabilità
+            probability += min(discount / 100, 0.4)  # Max +40%
+    
+    # Modifica per categoria
+    category = shop.get("category", "").lower()
+    category_multipliers = {
+        'ristorante': 1.2,
+        'bar': 1.3,
+        'gelateria': 1.4,
+        'abbigliamento': 1.1,
+        'supermercato': 0.9,
+        'farmacia': 0.7,
+    }
+    probability *= category_multipliers.get(category, 1.0)
+    
+    # Modifica per età utente
+    age = user.get("age", 30)
+    if category in ['bar', 'gelateria'] and age < 35:
+        probability *= 1.2
+    elif category in ['farmacia'] and age > 50:
+        probability *= 1.3
+    
+    # Cap la probabilità al 90%
+    probability = min(probability, 0.9)
+    
+    decision = random.random() < probability
+    logger.debug(f"Decisione visita per user {user['user_id']} al negozio {shop['shop_name']}: "
+                f"probabilità={probability:.2f}, decisione={decision}")
+    
+    return decision
+
+def _create_simulated_visit(conn: DatabaseConnections, user: Dict, shop: Dict) -> None:
+    """Crea un record di visita simulata nel database."""
+    try:
+        # Calcola durata della visita
+        category = shop.get("category", "").lower()
+        duration_range = VISIT_DURATION_RANGES.get(category, (10, 30))
+        duration_minutes = random.randint(duration_range[0], duration_range[1])
+        
+        # Genera dati della visita
+        visit_start = datetime.now(timezone.utc).replace(tzinfo=None)
+        visit_end = visit_start.replace(minute=visit_start.minute + duration_minutes)
+        
+        # Probabilità di accettare l'offerta (se presente)
+        offer_accepted = random.random() < 0.7  # 70% accetta offerta
+        
+        # Spesa stimata basata su categoria
+        spending_ranges = {
+            'ristorante': (15, 80),
+            'bar': (3, 15),
+            'supermercato': (20, 120),
+            'abbigliamento': (25, 200),
+            'elettronica': (50, 500),
+            'farmacia': (8, 40),
+            'libreria': (10, 50),
+            'gelateria': (3, 12),
+            'parrucchiere': (25, 80),
+            'palestra': (30, 100),
+        }
+        spending_range = spending_ranges.get(category, (10, 50))
+        estimated_spending = random.uniform(spending_range[0], spending_range[1])
+        
+        # Soddisfazione (1-10)
+        satisfaction = random.randint(6, 10)  # Generalmente positiva
+        
+        # Inserisci nel database
+        ch = conn.get_ch_client()
+        
+        # Genera ID visita unico
+        visit_id = random.randint(100000, 999999)
+        
+        visit_data = (
+            visit_id,
+            user["user_id"],
+            shop["shop_id"],
+            0,  # offer_id (da implementare se necessario)
+            visit_start,
+            visit_end,
+            duration_minutes,
+            offer_accepted,
+            estimated_spending,
+            satisfaction,
+            visit_start.weekday() + 1,  # day_of_week
+            visit_start.hour,          # hour_of_day
+            "",                        # weather_condition
+            user.get("age", 0),
+            user.get("profession", ""),
+            user.get("interests", ""),
+            shop.get("shop_name", ""),
+            shop.get("category", ""),
+            datetime.now(timezone.utc).replace(tzinfo=None)  # created_at
+        )
+        
+        ch.execute("""
+            INSERT INTO user_visits (
+                visit_id, user_id, shop_id, offer_id, visit_start_time, visit_end_time,
+                duration_minutes, offer_accepted, estimated_spending, user_satisfaction,
+                day_of_week, hour_of_day, weather_condition, user_age, user_profession,
+                user_interests, shop_name, shop_category, created_at
+            ) VALUES
+        """, [visit_data])
+        
+        logger.info(f"📍 Visita simulata: User {user['user_id']} → {shop['shop_name']} "
+                   f"({duration_minutes}min, €{estimated_spending:.1f})")
+        
+    except Exception as e:
+        logger.error(f"Errore creazione visita simulata: {e}")
 
 # Operatori Bytewax
 def enrich_with_nearest_shop(item: Tuple[str, Dict], conn: DatabaseConnections) -> List[Tuple[str, Dict]]:
@@ -218,8 +360,21 @@ def check_proximity_and_generate_message(item: Tuple[str, Dict], conn: DatabaseC
             _generate_message(conn, user_profile, event)
         )
         event["poi_info"] = message
+        
+        # NUOVA FUNZIONALITÀ: Simula visita se condizioni sono favorevoli
+        if message and message.strip():
+            should_visit = _should_simulate_visit(user_profile, event, message)
+            if should_visit:
+                _create_simulated_visit(conn, user_profile, event)
+                event["visited_shop"] = True
+                event["visited_shop_id"] = event.get("shop_id")
+            else:
+                event["visited_shop"] = False
+        else:
+            event["visited_shop"] = False
     else:
         event["poi_info"] = ""
+        event["visited_shop"] = False
         
     return [(key, event)]
 
@@ -255,5 +410,7 @@ def write_to_clickhouse(item: Tuple[str, Dict], conn: DatabaseConnections) -> No
         
         if event.get("poi_info"):
             logger.info(f" Evento con messaggio salvato per user {key}")
+        if event.get("visited_shop"):
+            logger.info(f" Visita simulata registrata per user {key}")
     except Exception as e:
         logger.error(f"Errore scrittura ClickHouse: {e}")

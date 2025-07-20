@@ -3,7 +3,9 @@ let token = "";
 let username = "";
 let map, userMarker, userPopup, userPolyline;
 let shopsMarkers = [];
+let visitedShopsMarkers = [];  // NUOVO: Marker per negozi visitati
 let allShops = [];
+let visitedShops = [];  // NUOVO: Array negozi visitati
 let currentPosition = null;
 let routePoints = [];
 let notifications = [];
@@ -211,6 +213,7 @@ function handleLogout() {
   clearMap();
   notifications = [];
   notificationsPage = 0;
+  visitedShops = [];  // NUOVO: Pulisci negozi visitati
   
   // Clear storage
   sessionStorage.removeItem("nearYouToken");
@@ -288,9 +291,73 @@ function clearMap() {
     });
     shopsMarkers = [];
     
+    // NUOVO: Clear visited shop markers
+    visitedShopsMarkers.forEach(marker => {
+      if (marker._map) map.removeLayer(marker);
+    });
+    visitedShopsMarkers = [];
+    
     // Reset route
     routePoints = [];
   }
+}
+
+// NUOVA FUNZIONE: Marca negozi visitati sulla mappa
+function updateVisitedShopsMarkers(visitedShopsData) {
+  // Clear existing visited markers
+  visitedShopsMarkers.forEach(marker => {
+    if (marker._map) map.removeLayer(marker);
+  });
+  visitedShopsMarkers = [];
+  
+  if (!visitedShopsData || visitedShopsData.length === 0) {
+    return;
+  }
+  
+  console.log(`Marcando ${visitedShopsData.length} negozi visitati sulla mappa`);
+  
+  visitedShopsData.forEach(visitedShop => {
+    // Trova il negozio corrispondente nella lista allShops per ottenere coordinate
+    const shop = allShops.find(s => s.id === visitedShop.shop_id);
+    if (!shop) {
+      console.warn(`Negozio visitato ${visitedShop.shop_id} non trovato nella mappa`);
+      return;
+    }
+    
+    // Crea icona speciale per negozi visitati (stella verde)
+    const visitedIcon = L.icon({
+      iconUrl: "https://maps.google.com/mapfiles/ms/icons/green-dot.png",
+      iconSize: [32, 32],
+      iconAnchor: [16, 32],
+      popupAnchor: [0, -32]
+    });
+    
+    // Crea marker con stella
+    const starIcon = L.divIcon({
+      className: 'visited-shop-marker',
+      html: '⭐',
+      iconSize: [20, 20],
+      iconAnchor: [10, 10]
+    });
+    
+    const visitedMarker = L.marker([shop.lat, shop.lon], { icon: starIcon })
+      .bindPopup(`
+        <div class="custom-popup">
+          <div class="popup-header">✅ ${visitedShop.shop_name}</div>
+          <div class="popup-content">
+            <div><strong>Visitato!</strong></div>
+            <div>Categoria: ${visitedShop.shop_category}</div>
+            <div>Ultima visita: ${new Date(visitedShop.last_visit).toLocaleString()}</div>
+          </div>
+        </div>
+      `);
+    
+    visitedMarker.addTo(map);
+    visitedShopsMarkers.push(visitedMarker);
+  });
+  
+  // Aggiorna il contatore nella UI
+  document.getElementById("shops-nearby").textContent = `${allShops.length} (${visitedShopsData.length} visitati)`;
 }
 
 // WebSocket setup and management
@@ -433,7 +500,7 @@ function fallbackToPolling() {
 }
 
 function updateUserPosition(positionData) {
-  const { latitude, longitude, message, user_id } = positionData;
+  const { latitude, longitude, message, user_id, visited_shops: visitedShopsData } = positionData;
   const latlng = [latitude, longitude];
   
   // Store position and update route
@@ -452,6 +519,13 @@ function updateUserPosition(positionData) {
   userPolyline.setLatLngs(routePoints);
   if (!userPolyline._map) {
     userPolyline.addTo(map);
+  }
+  
+  // NUOVO: Aggiorna negozi visitati se ci sono dati
+  if (visitedShopsData && visitedShopsData.length > 0) {
+    visitedShops = visitedShopsData;
+    updateVisitedShopsMarkers(visitedShopsData);
+    console.log(`Aggiornati ${visitedShopsData.length} negozi visitati`);
   }
   
   // Update notification if we have a message
@@ -681,6 +755,10 @@ async function fetchShopsInVisibleArea() {
     console.log("Using cached shops for this area");
     allShops = localCache.shopAreas[cacheKey];
     filterShopsByCategory();
+    // NUOVO: Riapplica marker negozi visitati dopo reload shops
+    if (visitedShops.length > 0) {
+      updateVisitedShopsMarkers(visitedShops);
+    }
     return;
   }
   
@@ -719,6 +797,11 @@ async function fetchShopsInVisibleArea() {
     
     // Update the map with the new shops
     filterShopsByCategory();
+    
+    // NUOVO: Riapplica marker negozi visitati dopo reload shops
+    if (visitedShops.length > 0) {
+      updateVisitedShopsMarkers(visitedShops);
+    }
     
     // Update shop count
     document.getElementById("shops-nearby").textContent = allShops.length;
@@ -761,7 +844,11 @@ function filterShopsByCategory() {
   updateShopMarkers(filteredShops);
   
   // Update count in UI
-  document.getElementById("shops-nearby").textContent = filteredShops.length;
+  const visitedCount = visitedShops.length;
+  const countText = visitedCount > 0 ? 
+    `${filteredShops.length} (${visitedCount} visitati)` : 
+    filteredShops.length.toString();
+  document.getElementById("shops-nearby").textContent = countText;
 }
 
 function updateShopMarkers(shops) {
