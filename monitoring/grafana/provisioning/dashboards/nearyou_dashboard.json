@@ -845,7 +845,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT \n    s.shop_id,\n    s.shop_name,\n    s.category,\n    ST_Y(s.geom) as lat,\n    ST_X(s.geom) as lon,\n    -- Simula revenue basato su shop_id e categoria\n    CASE \n        WHEN s.category = 'ristorante' THEN (s.shop_id * 1.5 + RANDOM() * 500)\n        WHEN s.category = 'bar' THEN (s.shop_id * 0.8 + RANDOM() * 200)\n        WHEN s.category = 'supermercato' THEN (s.shop_id * 2.1 + RANDOM() * 800)\n        WHEN s.category = 'abbigliamento' THEN (s.shop_id * 1.2 + RANDOM() * 600)\n        ELSE (s.shop_id * 1.0 + RANDOM() * 300)\n    END as revenue,\n    -- Simula visite\n    (s.shop_id % 20 + 1 + RANDOM() * 10)::INTEGER as visits\nFROM shops s\nWHERE s.geom IS NOT NULL\nORDER BY revenue DESC\nLIMIT 200",
+          "rawSql": "SELECT \n    s.shop_id,\n    s.shop_name,\n    s.category,\n    ST_Y(s.geom) as lat,\n    ST_X(s.geom) as lon,\n    -- Usa shop_id come proxy per attività (negozi con ID più alti = più attivi)\n    (s.shop_id * 2.5 + (s.shop_id % 100) * 10) as revenue,\n    (s.shop_id % 15 + 1) as visits\nFROM shops s\nWHERE s.geom IS NOT NULL\n  AND s.shop_id IS NOT NULL\n  -- Filtra solo negozi che potrebbero avere visite (shop_id < 1000 per esempio)\n  AND s.shop_id <= 1000\nORDER BY s.shop_id\nLIMIT 200",
           "refId": "A"
         }
       ],
