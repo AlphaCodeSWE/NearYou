@@ -916,37 +916,18 @@ function filterShopsByCategory() {
   updateShopCount(finalShops, categoryShops.length, visitedShopsOnMap.length);
 }
 
-// 📊 CONTEGGIO AVANZATO
+// 📊 CONTEGGIO SEMPLICE - Solo il numero corrispondente al filtro
 function updateShopCount(shopsDisplayed = null, categoryCount = null, visitedExtraCount = null) {
-  const shopsToCount = shopsDisplayed || allShops;
-  
-  const totalVisited = visitedShops.filter(v => 
-    shopsToCount.some(shop => shop.id === v.shop_id)
-  ).length;
-  
   let countText;
   
   if (categoryFilter === "all") {
-    countText = totalVisited > 0 ? 
-      `${shopsToCount.length} negozi (${totalVisited} visitati)` : 
-      `${shopsToCount.length} negozi`;
+    // Se "Tutti", mostra il totale di negozi visualizzati
+    const total = shopsDisplayed ? shopsDisplayed.length : allShops.length;
+    countText = `${total}`;
   } else {
-    // Mostra breakdown dettagliato
-    const baseCategory = categoryCount || 0;
-    const extraVisited = visitedExtraCount || 0;
-    const extraRandom = shopsToCount.length - baseCategory - extraVisited;
-    
-    let parts = [`${baseCategory} ${categoryFilter}`];
-    
-    if (extraVisited > 0) {
-      parts.push(`${extraVisited} visitati`);
-    }
-    
-    if (extraRandom > 0) {
-      parts.push(`${extraRandom} vicini`);
-    }
-    
-    countText = `${parts.join(' + ')} = ${shopsToCount.length}`;
+    // Se categoria specifica, mostra SOLO il numero della categoria
+    const actualCategoryCount = categoryCount || 0;
+    countText = `${actualCategoryCount}`;
   }
   
   document.getElementById("shops-nearby").textContent = countText;
