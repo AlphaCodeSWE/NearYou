@@ -816,8 +816,8 @@ function generateFallbackShopsInArea(area) {
   const categories = Object.keys(categoryMapping).filter(cat => cat !== "all");
   const shops = [];
   
-  // Generate 15 random shops within the visible area
-  for (let i = 1; i <= 15; i++) {
+  // Generate 60 random shops within the visible area (più di 50 per sicurezza)
+  for (let i = 1; i <= 60; i++) {
     const lat = area.south + (Math.random() * (area.north - area.south));
     const lon = area.west + (Math.random() * (area.east - area.west));
     
@@ -838,22 +838,25 @@ function generateFallbackShopsInArea(area) {
   return shops;
 }
 
+// 🚀 FUNZIONE FILTRO AVANZATA: Minimo 50 negozi + Visitati sempre visibili
 function filterShopsByCategory() {
   if (!isDataLoaded || allShops.length === 0) {
     console.log("Impossibile filtrare: dati non ancora caricati");
     return;
   }
   
-  console.log(`Applicando filtro categoria: ${categoryFilter}`);
-  console.log(`Totale negozi disponibili: ${allShops.length}`);
+  console.log(`🎯 Applicando filtro categoria: ${categoryFilter}`);
+  console.log(`📊 Totale negozi disponibili: ${allShops.length}`);
   
-  // Filter shops by selected category
-  let filteredShops = [...allShops];
+  // STEP 1: Trova negozi della categoria richiesta
+  let categoryShops = [];
   
-  if (categoryFilter !== "all") {
+  if (categoryFilter === "all") {
+    categoryShops = [...allShops];
+  } else {
     const targetCategories = categoryMapping[categoryFilter] || [categoryFilter];
     
-    filteredShops = allShops.filter(shop => {
+    categoryShops = allShops.filter(shop => {
       if (!shop.category) return false;
       
       const shopCategory = shop.category.toLowerCase().trim();
@@ -864,35 +867,93 @@ function filterShopsByCategory() {
                target.includes(shopCategory);
       });
     });
+  }
+  
+  // STEP 2: Aggiungi negozi visitati (SEMPRE visibili)
+  const visitedShopIds = visitedShops.map(v => v.shop_id);
+  const visitedShopsOnMap = allShops.filter(shop => 
+    visitedShopIds.includes(shop.id) && 
+    !categoryShops.some(filtered => filtered.id === shop.id) // Evita duplicati
+  );
+  
+  // STEP 3: 🎯 GARANTISCI MINIMO 50 NEGOZI
+  let finalShops = [...categoryShops, ...visitedShopsOnMap];
+  
+  if (finalShops.length < 50 && categoryFilter !== "all") {
+    console.log(`⚠️ Solo ${finalShops.length} negozi trovati, aggiungendo altri per raggiungere 50...`);
     
-    console.log(`Filtro "${categoryFilter}": trovati ${filteredShops.length}/${allShops.length} negozi`);
-    console.log('Categorie target:', targetCategories);
-    console.log('Categorie matchate:', [...new Set(filteredShops.map(s => s.category))]);
+    // Aggiungi negozi random di altre categorie per raggiungere 50
+    const remainingShops = allShops.filter(shop => 
+      !finalShops.some(final => final.id === shop.id)
+    );
+    
+    // Ordina per vicinanza se abbiamo posizione utente
+    if (currentPosition && remainingShops.length > 0) {
+      remainingShops.forEach(shop => {
+        shop.distance = calculateHaversineDistance(
+          currentPosition[0], currentPosition[1],
+          shop.lat, shop.lon
+        );
+      });
+      remainingShops.sort((a, b) => a.distance - b.distance);
+    }
+    
+    // Aggiungi fino a raggiungere 50
+    const needed = Math.min(50 - finalShops.length, remainingShops.length);
+    finalShops = [...finalShops, ...remainingShops.slice(0, needed)];
+  }
+  
+  console.log(`✅ Filtro "${categoryFilter}": ${categoryShops.length} categoria + ${visitedShopsOnMap.length} visitati + ${finalShops.length - categoryShops.length - visitedShopsOnMap.length} extra = ${finalShops.length} totali`);
+  
+  if (visitedShopsOnMap.length > 0) {
+    console.log(`🟢 Negozi visitati sempre visibili:`, visitedShopsOnMap.map(s => s.name || s.shop_name));
   }
   
   // Update shop markers on the map
-  updateShopMarkers(filteredShops);
+  updateShopMarkers(finalShops);
   
   // Update count in UI
-  updateShopCount(filteredShops);
+  updateShopCount(finalShops, categoryShops.length, visitedShopsOnMap.length);
 }
 
-function updateShopCount(filteredShops = null) {
-  const shopsToCount = filteredShops || allShops;
+// 📊 CONTEGGIO AVANZATO
+function updateShopCount(shopsDisplayed = null, categoryCount = null, visitedExtraCount = null) {
+  const shopsToCount = shopsDisplayed || allShops;
   
-  const visitedCount = visitedShops.filter(v => 
+  const totalVisited = visitedShops.filter(v => 
     shopsToCount.some(shop => shop.id === v.shop_id)
   ).length;
   
-  const countText = visitedCount > 0 ? 
-    `${shopsToCount.length} (${visitedCount} visitati)` : 
-    shopsToCount.length.toString();
+  let countText;
+  
+  if (categoryFilter === "all") {
+    countText = totalVisited > 0 ? 
+      `${shopsToCount.length} negozi (${totalVisited} visitati)` : 
+      `${shopsToCount.length} negozi`;
+  } else {
+    // Mostra breakdown dettagliato
+    const baseCategory = categoryCount || 0;
+    const extraVisited = visitedExtraCount || 0;
+    const extraRandom = shopsToCount.length - baseCategory - extraVisited;
+    
+    let parts = [`${baseCategory} ${categoryFilter}`];
+    
+    if (extraVisited > 0) {
+      parts.push(`${extraVisited} visitati`);
+    }
+    
+    if (extraRandom > 0) {
+      parts.push(`${extraRandom} vicini`);
+    }
+    
+    countText = `${parts.join(' + ')} = ${shopsToCount.length}`;
+  }
   
   document.getElementById("shops-nearby").textContent = countText;
 }
 
 function updateShopMarkers(shops) {
-  console.log(`Aggiornando marker per ${shops.length} negozi`);
+  console.log(`🗺️ Aggiornando marker per ${shops.length} negozi`);
   
   // Clear existing markers
   shopsMarkers.forEach(marker => {
@@ -909,7 +970,7 @@ function updateShopMarkers(shops) {
     let iconUrl = "https://maps.google.com/mapfiles/ms/icons/red.png";
     
     if (isVisited) {
-      // VISITATO: usa marker verde
+      // 🟢 VISITATO: usa sempre marker verde (priorità massima)
       iconUrl = "https://maps.google.com/mapfiles/ms/icons/green.png";
     } else {
       // Non visitato: usa colori per categoria
@@ -938,11 +999,12 @@ function updateShopMarkers(shops) {
     // Popup content con indicazione se visitato
     let popupContent = `
       <div class="custom-popup">
-        <div class="popup-header ${isVisited ? 'visited' : ''}">${shop.name}</div>
+        <div class="popup-header ${isVisited ? 'visited' : ''}">${shop.name || shop.shop_name}</div>
         <div class="popup-content">
           ${isVisited ? '<div class="visited-badge">✅ Visitato!</div>' : ''}
           <div>Categoria: ${shop.category}</div>
           <div>ID: ${shop.id}</div>
+          ${shop.distance ? `<div>Distanza: ${(shop.distance * 1000).toFixed(0)}m</div>` : ''}
         </div>
       </div>
     `;
@@ -954,7 +1016,7 @@ function updateShopMarkers(shops) {
     shopsMarkers.push(marker);
   });
   
-  console.log(`Marker aggiornati: ${shopsMarkers.length} marker sulla mappa`);
+  console.log(`✅ Marker aggiornati: ${shopsMarkers.length} marker sulla mappa`);
 }
 
 function findClosestShop(position) {
