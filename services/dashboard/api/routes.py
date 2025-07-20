@@ -15,7 +15,6 @@ from .models import (
 )
 from .dependencies import get_clickhouse_client, get_current_user
 
-# Database e endpoints sicuri richiedono autenticazione 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -26,8 +25,6 @@ async def get_user_profile(
     user_id: Optional[int] = Query(None, description="ID dell'utente (solo per debug)")
 ):
     """Ottiene il profilo dell'utente autenticato."""
-    # Per sicurezza, usa l'ID dell'utente corrente, non quello in query
-    # a meno che non siamo in modalità debug
     uid = user_id if user_id is not None else current_user["user_id"]
     
     query = """
@@ -99,16 +96,14 @@ async def get_user_stats(
     """Ottiene statistiche sull'attività dell'utente."""
     uid = current_user["user_id"]
     
-    # Determina intervallo di tempo
     now = datetime.now()
     if time_period == "week":
         since = now - timedelta(days=7)
     elif time_period == "month":
         since = now - timedelta(days=30)
-    else:  # day è il default
+    else:
         since = now - timedelta(days=1)
     
-    # Query per statistiche
     query = """
         SELECT 
             COUNT(*) as total_events,
@@ -187,12 +182,12 @@ async def get_shops_in_area(
 ):
     """
     Recupera tutti i POI/negozi nell'area visibile della mappa.
-    Estrae i POI unici dalla tabella user_events di ClickHouse.
+    OTTIMIZZATO: Limitato numero di risultati per ridurre lag.
     """
-    logger.info(f"🗺️ Richiesta negozi per area: [{s:.4f},{w:.4f}] -> [{n:.4f},{e:.4f}]")
+    logger.info(f"Richiesta negozi per area: [{s:.4f},{w:.4f}] -> [{n:.4f},{e:.4f}]")
     
     try:
-        # Estrai POI unici da user_events nell'area specificata
+        # OTTIMIZZAZIONE: Query con LIMIT per ridurre carico
         query = """
             SELECT 
                 cityHash64(poi_name) as id,
@@ -210,7 +205,7 @@ async def get_shops_in_area(
             HAVING lat BETWEEN %(south)s AND %(north)s
                AND lon BETWEEN %(west)s AND %(east)s
             ORDER BY visit_count DESC, poi_name
-            LIMIT 200
+            LIMIT 80
         """
         
         rows = ch_client.execute(query, {
@@ -222,7 +217,6 @@ async def get_shops_in_area(
         
         if rows:
             shops = []
-            # Mappa semplice per assegnare categorie basate sul nome
             category_mapping = {
                 'supermercato': 'supermarket',
                 'market': 'supermarket', 
@@ -259,8 +253,7 @@ async def get_shops_in_area(
             for row in rows:
                 poi_name = row[1].lower()
                 
-                # Determina categoria in base al nome
-                category = 'convenience'  # default
+                category = 'convenience'
                 for keyword, cat in category_mapping.items():
                     if keyword in poi_name:
                         category = cat
@@ -275,25 +268,24 @@ async def get_shops_in_area(
                     "visit_count": int(row[5])
                 })
                 
-            logger.info(f"✅ Trovati {len(shops)} POI da user_events nell'area [{s:.4f},{w:.4f}] -> [{n:.4f},{e:.4f}]")
+            logger.info(f"Trovati {len(shops)} POI da user_events nell'area")
             return shops
         else:
-            logger.info("⚠️ Nessun POI trovato in user_events per quest'area")
+            logger.info("Nessun POI trovato in user_events per quest'area")
             
     except Exception as e:
-        logger.error(f"❌ Errore query ClickHouse: {e}")
+        logger.error(f"Errore query ClickHouse: {e}")
     
-    # Fallback: genera dati di test se non ci sono eventi
-    logger.info("🎲 Generando POI di fallback per l'area...")
+    # Fallback: genera dati di test limitati
+    logger.info("Generando POI di fallback per l'area...")
     return generate_fallback_pois(n, s, e, w)
 
 
 def generate_fallback_pois(north: float, south: float, east: float, west: float) -> List[dict]:
     """
     Genera POI di esempio quando user_events è vuoto.
-    Simula POI realistici per Milano.
+    OTTIMIZZATO: Ridotto numero per migliorare performance.
     """
-    # POI tipici di Milano con categorie reali dal tuo paste.txt
     milano_pois = [
         {"name": "Supermercato Esselunga", "category": "supermarket"},
         {"name": "Parrucchiere Bella Vista", "category": "hairdresser"},
@@ -318,13 +310,13 @@ def generate_fallback_pois(north: float, south: float, east: float, west: float)
     ]
     
     shops = []
-    for i, poi in enumerate(milano_pois[:15]):  # Massimo 15 POI
-        # Coordinate casuali nell'area
+    # OTTIMIZZAZIONE: Ridotto da 15 a 10 POI per ridurre overhead
+    for i, poi in enumerate(milano_pois[:10]):
         lat = south + random.random() * (north - south)
         lon = west + random.random() * (east - west)
         
         shops.append({
-            "id": i + 1000,  # ID alto per distinguere dal vero DB
+            "id": i + 1000,
             "shop_name": poi["name"],
             "category": poi["category"],
             "lat": lat,
@@ -332,5 +324,5 @@ def generate_fallback_pois(north: float, south: float, east: float, west: float)
             "visit_count": random.randint(1, 50)
         })
     
-    logger.info(f"✅ Generati {len(shops)} POI di fallback")
+    logger.info(f"Generati {len(shops)} POI di fallback")
     return shops

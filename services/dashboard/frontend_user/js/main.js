@@ -4,7 +4,7 @@ let username = "";
 let map, userMarker, userPopup, userPolyline;
 let shopsMarkers = [];
 let allShops = [];
-let visitedShops = [];  // Array negozi visitati
+let visitedShops = [];
 let currentPosition = null;
 let routePoints = [];
 let notifications = [];
@@ -18,15 +18,19 @@ let lazyLoadObserver = null;
 let isMapInitialized = false;
 let isDataLoaded = false;
 
-// NUOVO: Map per tracking marker esistenti (performance optimization)
-let markersMap = new Map(); // shop_id -> marker object
+// OTTIMIZZAZIONE: Map per tracking marker esistenti
+let markersMap = new Map();
 
 // WebSocket variables
 let websocket = null;
 let isReconnecting = false;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 5;
-const RECONNECT_INTERVAL = 3000; // 3 secondi
+const RECONNECT_INTERVAL = 3000;
+
+// OTTIMIZZAZIONE: Debouncing per map events
+let mapMoveTimeout = null;
+let shopsLoadTimeout = null;
 
 // User profile data
 const DEFAULT_USER_PROFILE = {
@@ -36,7 +40,7 @@ const DEFAULT_USER_PROFILE = {
   interests: "--"
 };
 
-// MAPPATURA CATEGORIE AGGIORNATA BASATA SUI DATI REALI
+// MAPPATURA CATEGORIE AGGIORNATA
 const categoryMapping = {
   "all": "all",
   "abbigliamento": ["clothes", "shoes", "jewelry", "bag", "fashion_accessories", "boutique", "tailor"],
@@ -69,9 +73,9 @@ const userAvatar = document.getElementById("user-avatar");
 
 // Local cache for fetched data
 const localCache = {
-  shopAreas: {},  // Cache for shops in different areas
-  notifications: [],  // Cache for loaded notifications
-  profile: null  // Cache for user profile
+  shopAreas: {},
+  notifications: [],
+  profile: null
 };
 
 // Initialize
@@ -146,7 +150,7 @@ function setupLazyLoadingObservers() {
       }
     });
   }, {
-    rootMargin: '0px 0px 100px 0px' // Load when 100px from viewport
+    rootMargin: '0px 0px 100px 0px'
   });
   
   // Observe the sentinel element
@@ -155,13 +159,13 @@ function setupLazyLoadingObservers() {
     lazyLoadObserver.observe(sentinel);
   }
   
-  // Observer for stats section (load only when visible)
+  // Observer for stats section
   const statsObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
         console.log("Stats section is visible, fetching stats");
         fetchUserStats();
-        statsObserver.unobserve(entry.target); // Only need to load once
+        statsObserver.unobserve(entry.target);
       }
     });
   });
@@ -261,7 +265,7 @@ function handleLogout() {
   clearMap();
   notifications = [];
   notificationsPage = 0;
-  visitedShops = [];  // Pulisci negozi visitati
+  visitedShops = [];
   isMapInitialized = false;
   isDataLoaded = false;
   
@@ -274,7 +278,7 @@ function handleLogout() {
   localCache.notifications = [];
   localCache.profile = null;
   
-  // NUOVO: Clear markers map
+  // Clear markers map
   markersMap.clear();
   
   // Refresh the page
@@ -326,15 +330,24 @@ function initMap() {
   }, 300);
 }
 
+// OTTIMIZZAZIONE: Setup listeners mappa con debouncing
 function setupMapListeners() {
   console.log("Setup listeners mappa...");
   
-  // Lazy load shops when map view changes
+  // DEBOUNCING: Aspetta 300ms dopo stop movimento prima di caricare shops
   map.on('moveend', function() {
-    console.log("Map view changed, loading shops for visible area");
-    if (token && isMapInitialized) {
-      fetchShopsInVisibleArea();
+    // Cancella timeout precedente
+    if (mapMoveTimeout) {
+      clearTimeout(mapMoveTimeout);
     }
+    
+    // Imposta nuovo timeout
+    mapMoveTimeout = setTimeout(() => {
+      console.log("Map view changed (debounced), loading shops for visible area");
+      if (token && isMapInitialized) {
+        fetchShopsInVisibleArea();
+      }
+    }, 300);
   });
   
   // Also load shops when map is first initialized
@@ -365,38 +378,32 @@ function clearMap() {
 function setupWebSocket() {
   if (!token || websocket) return;
   
-  // Determina il protocollo corretto (ws o wss) in base all'URL corrente
+  // Determina il protocollo corretto
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const host = window.location.host;
   const wsUrl = `${protocol}//${host}/ws/positions`;
   
   console.log(`Connecting to WebSocket at ${wsUrl}`);
   
-  // Crea una nuova connessione WebSocket
   websocket = new WebSocket(wsUrl);
   
-  // Gestione dell'apertura della connessione
   websocket.onopen = () => {
     console.log('WebSocket connection established');
     reconnectAttempts = 0;
     
-    // Invia il token di autenticazione
     websocket.send(JSON.stringify({
       token: token
     }));
   };
   
-  // Gestione dei messaggi in arrivo
   websocket.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
       
-      // Gestisci diversi tipi di messaggi
       if (data.type === 'connection_established') {
         console.log(`WebSocket connection confirmed for user ${data.user_id}`);
       }
       else if (data.type === 'position_update') {
-        // Aggiorna la posizione dell'utente sulla mappa
         updateUserPosition(data.data);
       }
       else if (data.error) {
@@ -408,24 +415,20 @@ function setupWebSocket() {
     }
   };
   
-  // Gestione degli errori
   websocket.onerror = (error) => {
     console.error('WebSocket error:', error);
   };
   
-  // Gestione della chiusura della connessione
   websocket.onclose = (event) => {
     console.log(`WebSocket connection closed with code ${event.code}`);
     websocket = null;
     
-    // Tenta di riconnettersi se non è stata una chiusura volontaria
     if (!isReconnecting && event.code !== 1000) {
       reconnectWebSocket();
     }
   };
 }
 
-// Funzione per riconnettere il WebSocket in caso di interruzione
 function reconnectWebSocket() {
   if (isReconnecting || reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) return;
   
@@ -434,17 +437,14 @@ function reconnectWebSocket() {
   
   console.log(`Attempting to reconnect WebSocket (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
   
-  // Mostra notifica di riconnessione
   showReconnectingNotification();
   
-  // Attendi prima di ritentare
   setTimeout(() => {
     isReconnecting = false;
     setupWebSocket();
   }, RECONNECT_INTERVAL);
 }
 
-// Funzione per chiudere volontariamente la connessione WebSocket
 function closeWebSocket() {
   if (websocket) {
     websocket.close(1000, "Disconnessione volontaria");
@@ -452,14 +452,11 @@ function closeWebSocket() {
   }
 }
 
-// Mostra una notifica di riconnessione all'utente
 function showReconnectingNotification() {
-  // Aggiungi un elemento di notifica connessione nella parte superiore della mappa
   const reconnectDiv = document.createElement('div');
   reconnectDiv.className = 'reconnect-notification';
   reconnectDiv.innerHTML = `<i class="fas fa-sync-alt fa-spin"></i> Riconnessione in corso...`;
   
-  // Aggiungi o sostituisci l'elemento esistente
   const existingNotification = document.querySelector('.reconnect-notification');
   if (existingNotification) {
     existingNotification.replaceWith(reconnectDiv);
@@ -467,7 +464,6 @@ function showReconnectingNotification() {
     document.getElementById('map-container').appendChild(reconnectDiv);
   }
   
-  // Rimuovi dopo 3 secondi
   setTimeout(() => {
     reconnectDiv.remove();
   }, 3000);
@@ -482,7 +478,6 @@ async function pollUserPosition() {
     });
     const { positions } = await res.json();
     
-    // Update UI only if we got positions
     if (positions && positions.length > 0) {
       updateUserPosition(positions[0]);
     }
@@ -491,13 +486,11 @@ async function pollUserPosition() {
   }
 }
 
-// Funzione per fare fallback al polling HTTP se WebSocket fallisce
 function fallbackToPolling() {
   console.log("Fallback to HTTP polling due to WebSocket failure");
   
-  // Se il WebSocket fallisce, usa il vecchio metodo di polling
   pollUserPosition();
-  setInterval(pollUserPosition, 3000);
+  setInterval(pollUserPosition, 5000); // Ogni 5 secondi invece di 3
 }
 
 function updateUserPosition(positionData) {
@@ -510,7 +503,7 @@ function updateUserPosition(positionData) {
   currentPosition = latlng;
   routePoints.push(latlng);
   
-  // Limit route points for performance (max 100 points)
+  // Limit route points for performance
   if (routePoints.length > 100) {
     routePoints = routePoints.slice(-100);
   }
@@ -532,7 +525,6 @@ function updateUserPosition(positionData) {
   // Aggiorna negozi visitati se ci sono dati
   if (visitedShopsData && visitedShopsData.length > 0) {
     visitedShops = visitedShopsData;
-    // Riapplica i marker per mostrare quelli visitati in verde
     if (isDataLoaded) {
       filterShopsByCategory();
     }
@@ -541,20 +533,16 @@ function updateUserPosition(positionData) {
   
   // Update notification if we have a message
   if (message && message.trim() !== "") {
-    // Check if this is a new message
     const isNewMessage = !notifications.some(n => n.message === message);
     
     if (isNewMessage) {
-      // Get the current timestamp
       const timestamp = new Date().toLocaleTimeString();
       
-      // Determine the closest shop
       let closestShop = null;
       if (allShops.length > 0) {
         closestShop = findClosestShop(latlng);
       }
       
-      // Create notification
       const notification = {
         id: Date.now(),
         message: message,
@@ -563,12 +551,10 @@ function updateUserPosition(positionData) {
         category: closestShop ? closestShop.category : "shopping"
       };
       
-      // Add to notifications and update UI
       notifications.unshift(notification);
       localCache.notifications.unshift(notification);
       updateNotifications();
       
-      // Show popup on map
       if (userPopup) {
         map.closePopup(userPopup);
       }
@@ -586,7 +572,6 @@ function updateUserPosition(positionData) {
       `)
       .openOn(map);
       
-      // Update notification count
       document.getElementById("total-notifications").textContent = notifications.length;
     }
   }
@@ -597,20 +582,25 @@ function updateUserPosition(positionData) {
     document.getElementById("total-distance").textContent = totalDistance.toFixed(1);
   }
   
-  // Check if we need to load shops for this area
+  // Check if we need to load shops for this area - OTTIMIZZATO
   if (map && shouldLoadShopsForPosition(latlng)) {
-    fetchShopsInVisibleArea();
+    // DEBOUNCING anche per position updates
+    if (shopsLoadTimeout) {
+      clearTimeout(shopsLoadTimeout);
+    }
+    
+    shopsLoadTimeout = setTimeout(() => {
+      fetchShopsInVisibleArea();
+    }, 500);
   }
 }
 
 function shouldLoadShopsForPosition(position) {
-  // Check if we have already loaded shops for this area
   const bounds = map.getBounds();
   if (!bounds.contains(position)) {
     return true;
   }
   
-  // Also reload if we have very few shops
   if (allShops.length < 5) {
     return true;
   }
@@ -621,10 +611,8 @@ function shouldLoadShopsForPosition(position) {
 function updateNotifications() {
   const container = document.getElementById("notifications-container");
   
-  // Get the latest notifications
   const recentNotifications = localCache.notifications.slice(0, 10);
   
-  // Clear container first
   container.innerHTML = "";
   
   if (recentNotifications.length === 0) {
@@ -633,7 +621,6 @@ function updateNotifications() {
   }
   
   recentNotifications.forEach(notification => {
-    // Choose icon based on category
     let iconClass = "fas fa-shopping-bag";
     if (notification.category === "ristorante" || notification.category === "bar") {
       iconClass = "fas fa-utensils";
@@ -664,7 +651,6 @@ function updateNotifications() {
 async function fetchUserProfile() {
   if (!token) return;
   
-  // Check if we have cached profile data
   if (localCache.profile) {
     userData = { ...localCache.profile };
     updateProfileUI();
@@ -672,7 +658,6 @@ async function fetchUserProfile() {
   }
   
   try {
-    // Fetch profile data from the API
     const res = await fetch("/api/user/profile", {
       headers: { Authorization: `Bearer ${token}` }
     });
@@ -682,7 +667,6 @@ async function fetchUserProfile() {
     try {
       profileData = await res.json();
       
-      // Cache the profile data
       localCache.profile = {
         id: profileData.user_id,
         age: profileData.age,
@@ -692,7 +676,6 @@ async function fetchUserProfile() {
       
     } catch (e) {
       console.error("Error parsing profile data:", e);
-      // Fallback profile data
       profileData = {
         user_id: 1,
         age: Math.floor(Math.random() * 30) + 20,
@@ -716,7 +699,6 @@ async function fetchUserProfile() {
 }
 
 function updateProfileUI() {
-  // Update UI elements with user data
   document.getElementById("user-id").textContent = `ID: ${userData.id}`;
   document.getElementById("user-age").textContent = `Età: ${userData.age}`;
   document.getElementById("user-job").textContent = `Professione: ${userData.profession}`;
@@ -733,19 +715,14 @@ async function fetchUserStats() {
     
     const stats = await res.json();
     
-    // Update stats UI
     document.getElementById("total-notifications").textContent = stats.notifications || "0";
-    
-    // The other stats are updated elsewhere:
-    // - total-distance: updated in updateUserPosition
-    // - shops-nearby: updated in fetchShopsInVisibleArea
-    // - active-time: updated in updateActiveTime
     
   } catch (err) {
     console.error("Error fetching user stats:", err);
   }
 }
 
+// OTTIMIZZAZIONE: fetchShopsInVisibleArea con limit
 async function fetchShopsInVisibleArea() {
   if (!token || !map || !isMapInitialized) {
     console.log("Non posso caricare negozi: token, mappa o inizializzazione mancanti", {
@@ -756,7 +733,6 @@ async function fetchShopsInVisibleArea() {
     return;
   }
   
-  // Get current map bounds
   const bounds = map.getBounds();
   const visibleArea = {
     north: bounds.getNorth(),
@@ -765,10 +741,8 @@ async function fetchShopsInVisibleArea() {
     west: bounds.getWest()
   };
   
-  // Create cache key based on visible area (rounded to reduce variations)
   const cacheKey = `${visibleArea.west.toFixed(4)},${visibleArea.south.toFixed(4)},${visibleArea.east.toFixed(4)},${visibleArea.north.toFixed(4)}`;
   
-  // Check if we have already loaded shops for this area
   if (localCache.shopAreas[cacheKey]) {
     console.log("Using cached shops for this area");
     allShops = localCache.shopAreas[cacheKey];
@@ -784,17 +758,21 @@ async function fetchShopsInVisibleArea() {
       headers: { Authorization: `Bearer ${token}` }
     });
     
-    // Process API response
     let shops;
     try {
       shops = await res.json();
     } catch (e) {
       console.error("Error parsing shops data:", e);
-      // If API fails, generate fallback data in visible area
       shops = generateFallbackShopsInArea(visibleArea);
     }
     
-    // Normalize shop data format
+    // OTTIMIZZAZIONE: Limita il numero di shops processati
+    const maxShops = 100;
+    if (shops.length > maxShops) {
+      console.log(`Limitando shops da ${shops.length} a ${maxShops}`);
+      shops = shops.slice(0, maxShops);
+    }
+    
     const normalizedShops = shops.map(shop => ({
       id: shop.id || shop.shop_id,
       name: shop.shop_name || shop.name,
@@ -803,19 +781,14 @@ async function fetchShopsInVisibleArea() {
       lon: shop.lon || (shop.geom ? shop.geom.coordinates[0] : 0)
     }));
     
-    // Update the global shops array
     allShops = normalizedShops;
     isDataLoaded = true;
     
-    // Cache the results for this area
     localCache.shopAreas[cacheKey] = normalizedShops;
     
     console.log(`Caricati ${normalizedShops.length} negozi per l'area visibile`);
     
-    // Update the map with the new shops
     filterShopsByCategory();
-    
-    // Update shop count
     updateShopCount();
     
   } catch (err) {
@@ -827,8 +800,8 @@ function generateFallbackShopsInArea(area) {
   const categories = Object.keys(categoryMapping).filter(cat => cat !== "all");
   const shops = [];
   
-  // Generate 60 random shops within the visible area (più di 50 per sicurezza)
-  for (let i = 1; i <= 60; i++) {
+  // RIDOTTO: max 50 shops invece di 60
+  for (let i = 1; i <= 50; i++) {
     const lat = area.south + (Math.random() * (area.north - area.south));
     const lon = area.west + (Math.random() * (area.east - area.west));
     
@@ -849,44 +822,51 @@ function generateFallbackShopsInArea(area) {
   return shops;
 }
 
-// FUNZIONE OTTIMIZZATA PER PERFORMANCE - Update incrementali marker
+// OTTIMIZZAZIONE: Update incrementali marker - MIGLIORATO
 function updateShopMarkersOptimized(shops) {
-  console.log(`🗺️ Update incrementale per ${shops.length} negozi`);
+  console.log(`Update incrementale per ${shops.length} negozi`);
   
-  // 1. Crea Set degli ID attuali per lookup veloce
   const currentShopIds = new Set(shops.map(shop => shop.id));
   
-  // 2. RIMUOVI solo marker che non esistono più
+  // BATCH DOM OPERATIONS: Rimuovi marker in batch
+  const markersToRemove = [];
   for (const [shopId, marker] of markersMap.entries()) {
     if (!currentShopIds.has(shopId)) {
-      map.removeLayer(marker);
-      markersMap.delete(shopId);
+      markersToRemove.push({ shopId, marker });
     }
   }
   
-  // 3. AGGIUNGI/AGGIORNA solo marker necessari
+  // Rimuovi in batch
+  markersToRemove.forEach(({ shopId, marker }) => {
+    map.removeLayer(marker);
+    markersMap.delete(shopId);
+  });
+  
+  // BATCH DOM OPERATIONS: Aggiungi marker in batch  
+  const markersToAdd = [];
   shops.forEach(shop => {
     const existingMarker = markersMap.get(shop.id);
     
     if (!existingMarker) {
-      // NUOVO marker - crealo
       const marker = createShopMarker(shop);
-      marker.addTo(map);
-      markersMap.set(shop.id, marker);
+      markersToAdd.push({ marker, shopId: shop.id });
     } else {
-      // ESISTENTE - aggiorna solo se necessario
       updateExistingMarker(existingMarker, shop);
     }
   });
   
-  console.log(`✅ Marker ottimizzati: ${markersMap.size} totali sulla mappa`);
+  // Aggiungi in batch
+  markersToAdd.forEach(({ marker, shopId }) => {
+    marker.addTo(map);
+    markersMap.set(shopId, marker);
+  });
+  
+  console.log(`Marker ottimizzati: ${markersMap.size} totali sulla mappa`);
 }
 
 function createShopMarker(shop) {
-  // Controlla se visitato
   const isVisited = visitedShops.some(v => v.shop_id === shop.id);
   
-  // Scegli icona (crea solo se necessario)
   let iconUrl = isVisited ? 
     "https://maps.google.com/mapfiles/ms/icons/green.png" :
     getShopCategoryIcon(shop.category);
@@ -900,11 +880,9 @@ function createShopMarker(shop) {
   
   const marker = L.marker([shop.lat, shop.lon], { icon: shopIcon });
   
-  // Popup content
   const popupContent = createPopupContent(shop, isVisited);
   marker.bindPopup(popupContent);
   
-  // Salva dati per confronti futuri
   marker._shopData = {
     id: shop.id,
     visited: isVisited,
@@ -920,7 +898,6 @@ function updateExistingMarker(marker, shop) {
   const oldData = marker._shopData;
   const isVisited = visitedShops.some(v => v.shop_id === shop.id);
   
-  // Controlla se è cambiato qualcosa di importante
   const needsUpdate = (
     oldData.visited !== isVisited ||
     oldData.category !== shop.category ||
@@ -929,12 +906,10 @@ function updateExistingMarker(marker, shop) {
   );
   
   if (needsUpdate) {
-    // Aggiorna posizione se cambiata
     if (oldData.lat !== shop.lat || oldData.lon !== shop.lon) {
       marker.setLatLng([shop.lat, shop.lon]);
     }
     
-    // Aggiorna icona se necessario
     if (oldData.visited !== isVisited || oldData.category !== shop.category) {
       const newIconUrl = isVisited ? 
         "https://maps.google.com/mapfiles/ms/icons/green.png" :
@@ -950,11 +925,9 @@ function updateExistingMarker(marker, shop) {
       marker.setIcon(newIcon);
     }
     
-    // Aggiorna popup se necessario
     const newPopupContent = createPopupContent(shop, isVisited);
     marker.setPopupContent(newPopupContent);
     
-    // Salva nuovi dati
     marker._shopData = {
       id: shop.id,
       visited: isVisited,
@@ -963,14 +936,13 @@ function updateExistingMarker(marker, shop) {
       lon: shop.lon
     };
     
-    console.log(`🔄 Aggiornato marker per ${shop.name || shop.shop_name}`);
+    console.log(`Aggiornato marker per ${shop.name || shop.shop_name}`);
   }
 }
 
 function getShopCategoryIcon(category) {
   const cat = category ? category.toLowerCase() : "";
   
-  // Trova categoria principale
   for (const [key, values] of Object.entries(categoryMapping)) {
     if (key === "all") continue;
     if (values.some(val => cat.includes(val) || val.includes(cat))) {
@@ -986,7 +958,7 @@ function createPopupContent(shop, isVisited) {
     <div class="custom-popup">
       <div class="popup-header ${isVisited ? 'visited' : ''}">${shop.name || shop.shop_name}</div>
       <div class="popup-content">
-        ${isVisited ? '<div class="visited-badge">✅ Visitato!</div>' : ''}
+        ${isVisited ? '<div class="visited-badge">Visitato!</div>' : ''}
         <div>Categoria: ${shop.category}</div>
         <div>ID: ${shop.id}</div>
         ${shop.distance ? `<div>Distanza: ${(shop.distance * 1000).toFixed(0)}m</div>` : ''}
@@ -995,25 +967,22 @@ function createPopupContent(shop, isVisited) {
   `;
 }
 
-// FUNZIONE FILTRO CORRETTA: Solo categoria richiesta + visitati
 function filterShopsByCategory() {
   if (!isDataLoaded || allShops.length === 0) {
     console.log("Impossibile filtrare: dati non ancora caricati");
     return;
   }
   
-  console.log(`🎯 Applicando filtro categoria: ${categoryFilter}`);
-  console.log(`📊 Totale negozi disponibili: ${allShops.length}`);
+  console.log(`Applicando filtro categoria: ${categoryFilter}`);
+  console.log(`Totale negozi disponibili: ${allShops.length}`);
   
   let finalShops = [];
   let categoryCount = 0;
   
   if (categoryFilter === "all") {
-    // Se "Tutti", mostra tutti i negozi disponibili
     finalShops = [...allShops];
     categoryCount = allShops.length;
   } else {
-    // Se categoria specifica, mostra SOLO quella categoria
     const targetCategories = categoryMapping[categoryFilter] || [categoryFilter];
     
     const categoryShops = allShops.filter(shop => {
@@ -1030,39 +999,32 @@ function filterShopsByCategory() {
     
     categoryCount = categoryShops.length;
     
-    // Aggiungi negozi visitati (SEMPRE visibili anche se fuori categoria)
     const visitedShopIds = visitedShops.map(v => v.shop_id);
     const visitedShopsOnMap = allShops.filter(shop => 
       visitedShopIds.includes(shop.id) && 
-      !categoryShops.some(filtered => filtered.id === shop.id) // Evita duplicati
+      !categoryShops.some(filtered => filtered.id === shop.id)
     );
     
     finalShops = [...categoryShops, ...visitedShopsOnMap];
     
     if (visitedShopsOnMap.length > 0) {
-      console.log(`🟢 Negozi visitati sempre visibili:`, visitedShopsOnMap.map(s => s.name || s.shop_name));
+      console.log(`Negozi visitati sempre visibili:`, visitedShopsOnMap.map(s => s.name || s.shop_name));
     }
   }
   
-  console.log(`✅ Filtro "${categoryFilter}": ${categoryCount} della categoria + ${finalShops.length - categoryCount} visitati extra = ${finalShops.length} totali mostrati`);
+  console.log(`Filtro "${categoryFilter}": ${categoryCount} della categoria + ${finalShops.length - categoryCount} visitati extra = ${finalShops.length} totali mostrati`);
   
-  // CAMBIO CRITICO: usa la funzione ottimizzata
   updateShopMarkersOptimized(finalShops);
-  
-  // Update count in UI (passa il conteggio della categoria)
   updateShopCount(finalShops, categoryCount);
 }
 
-// Conteggio semplice - Solo il numero corrispondente al filtro
 function updateShopCount(shopsDisplayed = null, categoryCount = null, visitedExtraCount = null) {
   let countText;
   
   if (categoryFilter === "all") {
-    // Se "Tutti", mostra il totale di negozi visualizzati
     const total = shopsDisplayed ? shopsDisplayed.length : allShops.length;
     countText = `${total}`;
   } else {
-    // Se categoria specifica, mostra SOLO il numero della categoria
     const actualCategoryCount = categoryCount || 0;
     countText = `${actualCategoryCount}`;
   }
@@ -1073,7 +1035,6 @@ function updateShopCount(shopsDisplayed = null, categoryCount = null, visitedExt
 function findClosestShop(position) {
   if (!allShops || allShops.length === 0) return null;
   
-  // Find closest shop based on distance
   let closestShop = null;
   let minDistance = Infinity;
   
@@ -1108,7 +1069,6 @@ async function loadMoreNotifications() {
     const data = await res.json();
     
     if (data.promotions && data.promotions.length > 0) {
-      // Process and add to notifications
       const newNotifications = data.promotions.map(p => ({
         id: p.event_id,
         message: p.message,
@@ -1117,16 +1077,12 @@ async function loadMoreNotifications() {
         category: determineCategory(p.shop_name)
       }));
       
-      // Append to local cache
       localCache.notifications = [...localCache.notifications, ...newNotifications];
       
-      // Update UI
       updateNotifications();
       
-      // Increment page counter
       notificationsPage++;
       
-      // Show/hide load more button
       if (data.promotions.length < 10) {
         loadMoreBtn.style.display = "none";
       } else {
@@ -1143,7 +1099,6 @@ async function loadMoreNotifications() {
 }
 
 function determineCategory(shopName) {
-  // Simple heuristic to determine shop category from name
   shopName = shopName.toLowerCase();
   
   if (shopName.includes("ristorante") || shopName.includes("trattoria") || shopName.includes("pizzeria")) {
@@ -1186,7 +1141,7 @@ function updateActiveTime() {
 
 // Utility Functions
 function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371; // Earth radius in km
+  const R = 6371;
   const dLat = toRad(lat2 - lat1);
   const dLon = toRad(lon2 - lon1);
   const a = 

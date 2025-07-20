@@ -22,14 +22,14 @@ from .api.models import Token
 # Import originali da mantenere
 from .auth import authenticate_user, create_access_token
 
-# ─── Configura logger ─────────────────────────────────────────────────────
+# Configura logger
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper())
 logger = logging.getLogger(__name__)
 
-# ─── Crea l'app FastAPI ───────────────────────────────────────────────────
+# Crea l'app FastAPI
 app = FastAPI(title="NearYou User Dashboard")
 
-# ─── Configurazione CORS ───────────────────────────────────────────────────
+# Configurazione CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -38,7 +38,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ─── Monta la UI statica ───────────────────────────────────────────────────
+# Monta la UI statica
 static_dir = os.path.join(os.path.dirname(__file__), "frontend_user")
 app.mount(
     "/static_user",
@@ -46,10 +46,10 @@ app.mount(
     name="static_user",
 )
 
-# ─── Includi il router API ───────────────────────────────────────────────────
+# Includi il router API
 app.include_router(api_router, prefix="/api")
 
-# ─── Login e generazione token ────────────────────────────────────────────
+# Login e generazione token
 @app.post("/api/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     """Endpoint per l'autenticazione e generazione token JWT."""
@@ -59,13 +59,13 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     token = create_access_token({"user_id": user["user_id"]})
     return {"access_token": token, "token_type": "bearer"}
 
-# ─── Reindirizza dalla radice alla dashboard utente ──────────────────────────
+# Reindirizza dalla radice alla dashboard utente
 @app.get("/", response_class=RedirectResponse)
 async def root():
     """Reindirizza dalla radice del sito alla dashboard utente."""
     return RedirectResponse(url="/dashboard/user")
 
-# ─── Dashboard utente principale ────────────────────────
+# Dashboard utente principale
 @app.get("/dashboard/user", response_class=HTMLResponse)
 async def user_dashboard():
     """Endpoint che serve la dashboard utente."""
@@ -73,7 +73,7 @@ async def user_dashboard():
     with open(html_path, encoding="utf8") as f:
         return HTMLResponse(f.read())
 
-# ─── Endpoint di debug per le env vars ────────────────────────────────────
+# Endpoint di debug per le env vars
 @app.get("/__debug/env")
 async def debug_env():
     """Endpoint di debug per verificare le variabili d'ambiente."""
@@ -84,11 +84,13 @@ async def debug_env():
         "POSTGRES_HOST": os.getenv("POSTGRES_HOST"),
     }
 
-# ─── WebSocket Manager ───────────────────────────
+# WebSocket Manager con cache posizioni
 class ConnectionManager:
     def __init__(self):
         # Dizionario user_id -> connessione WebSocket
         self.active_connections = {}
+        # Cache posizioni utente per evitare query continue
+        self.position_cache = {}
         
     async def connect(self, websocket: WebSocket, user_id: int):
         await websocket.accept()
@@ -98,7 +100,9 @@ class ConnectionManager:
     def disconnect(self, user_id: int):
         if user_id in self.active_connections:
             del self.active_connections[user_id]
-            logger.info(f"Utente {user_id} disconnesso. Connessioni attive: {len(self.active_connections)}")
+        if user_id in self.position_cache:
+            del self.position_cache[user_id]
+        logger.info(f"Utente {user_id} disconnesso. Connessioni attive: {len(self.active_connections)}")
     
     async def send_position_update(self, user_id: int, message: dict):
         if user_id in self.active_connections:
@@ -110,6 +114,28 @@ class ConnectionManager:
                 self.disconnect(user_id)
                 return False
         return False
+    
+    def has_position_changed(self, user_id: int, new_position: dict) -> bool:
+        """Verifica se la posizione è cambiata significativamente"""
+        if user_id not in self.position_cache:
+            return True
+            
+        old_pos = self.position_cache[user_id]
+        
+        # Calcola distanza semplice (approssimativa)
+        lat_diff = abs(new_position.get('latitude', 0) - old_pos.get('latitude', 0))
+        lon_diff = abs(new_position.get('longitude', 0) - old_pos.get('longitude', 0))
+        
+        # Soglia di movimento minimo (circa 10 metri)
+        threshold = 0.0001
+        
+        has_changed = lat_diff > threshold or lon_diff > threshold
+        
+        # Aggiorna cache se cambiata
+        if has_changed:
+            self.position_cache[user_id] = new_position
+            
+        return has_changed
 
 # Istanzia il connection manager per i WebSocket
 manager = ConnectionManager()
@@ -125,6 +151,7 @@ def get_visited_shops(ch_client: CHClient, user_id: int) -> list:
               AND visit_start_time >= now() - INTERVAL 24 HOUR
             GROUP BY shop_id, shop_name, shop_category
             ORDER BY last_visit DESC
+            LIMIT 20
         """, {"user_id": user_id})
         
         return [
@@ -140,12 +167,11 @@ def get_visited_shops(ch_client: CHClient, user_id: int) -> list:
         logger.error(f"Errore recupero negozi visitati per user {user_id}: {e}")
         return []
 
-# ─── WebSocket per aggiornamenti posizione in tempo reale ───────────────────────────
+# WebSocket per aggiornamenti posizione in tempo reale - OTTIMIZZATO
 @app.websocket("/ws/positions")
 async def websocket_positions(websocket: WebSocket):
     await websocket.accept()
     
-    # User ID e token saranno impostati dopo autenticazione
     user_id = None
     
     try:
@@ -196,7 +222,7 @@ async def websocket_positions(websocket: WebSocket):
             database=os.getenv("CLICKHOUSE_DATABASE", "nearyou"),
         )
         
-        # Loop principale: invia aggiornamenti posizione in tempo reale
+        # Loop principale: invia aggiornamenti posizione - RIDOTTA FREQUENZA
         while True:
             # Recupera ultima posizione dell'utente
             position_query = """
@@ -218,24 +244,29 @@ async def websocket_positions(websocket: WebSocket):
                 r = rows[0]
                 time_str = r[4].strftime("%Y-%m-%d %H:%M:%S") if r[4] else None
                 
-                # NUOVA FUNZIONALITÀ: Recupera negozi visitati
-                visited_shops = get_visited_shops(ch, user_id)
+                new_position = {
+                    "user_id": r[0],
+                    "latitude": r[1],
+                    "longitude": r[2],
+                    "message": r[3] or None,
+                    "timestamp": time_str
+                }
                 
-                # Invia aggiornamento posizione con negozi visitati
-                await websocket.send_json({
-                    "type": "position_update",
-                    "data": {
-                        "user_id": r[0],
-                        "latitude": r[1],
-                        "longitude": r[2],
-                        "message": r[3] or None,
-                        "timestamp": time_str,
-                        "visited_shops": visited_shops  # NUOVA: Lista negozi visitati
-                    }
-                })
+                # OTTIMIZZAZIONE: Invia solo se posizione cambiata
+                if manager.has_position_changed(user_id, new_position):
+                    # Recupera negozi visitati solo quando posizione cambia
+                    visited_shops = get_visited_shops(ch, user_id)
+                    new_position["visited_shops"] = visited_shops
+                    
+                    await websocket.send_json({
+                        "type": "position_update",
+                        "data": new_position
+                    })
+                    
+                    logger.debug(f"Posizione aggiornata per user {user_id}")
             
-            # Attendi prima del prossimo aggiornamento
-            await asyncio.sleep(1)  # Aggiornamento ogni secondo
+            # RIDOTTA FREQUENZA: da 1 secondo a 3 secondi
+            await asyncio.sleep(3)
             
     except WebSocketDisconnect:
         if user_id:
