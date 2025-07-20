@@ -851,6 +851,7 @@ function filterShopsByCategory() {
   document.getElementById("shops-nearby").textContent = countText;
 }
 
+
 function updateShopMarkers(shops) {
   // Clear existing markers
   shopsMarkers.forEach(marker => {
@@ -860,14 +861,24 @@ function updateShopMarkers(shops) {
   
   // Add new markers
   shops.forEach(shop => {
-    // Choose icon based on category
+    // NUOVO: Controlla se questo negozio è stato visitato
+    const isVisited = visitedShops.some(v => v.shop_id === shop.id);
+    
+    // Choose icon based on visited status or category
     let iconUrl = "https://maps.google.com/mapfiles/ms/icons/red.png";
-    if (shop.category === "ristorante" || shop.category === "bar") {
-      iconUrl = "https://maps.google.com/mapfiles/ms/icons/yellow.png";
-    } else if (shop.category === "supermercato") {
+    
+    if (isVisited) {
+      // VISITATO: usa marker verde
       iconUrl = "https://maps.google.com/mapfiles/ms/icons/green.png";
-    } else if (shop.category === "elettronica") {
-      iconUrl = "https://maps.google.com/mapfiles/ms/icons/blue.png";
+    } else {
+      // Non visitato: usa colori per categoria
+      if (shop.category === "ristorante" || shop.category === "bar") {
+        iconUrl = "https://maps.google.com/mapfiles/ms/icons/yellow.png";
+      } else if (shop.category === "supermercato") {
+        iconUrl = "https://maps.google.com/mapfiles/ms/icons/blue.png";
+      } else if (shop.category === "elettronica") {
+        iconUrl = "https://maps.google.com/mapfiles/ms/icons/purple.png";
+      }
     }
     
     const shopIcon = L.icon({
@@ -877,21 +888,27 @@ function updateShopMarkers(shops) {
       popupAnchor: [0, -32]
     });
     
-    const marker = L.marker([shop.lat, shop.lon], { icon: shopIcon })
-      .bindPopup(`
-        <div class="custom-popup">
-          <div class="popup-header">${shop.name}</div>
-          <div class="popup-content">
-            <div>Categoria: ${shop.category}</div>
-            <div>ID: ${shop.id}</div>
-          </div>
+    // Popup content con indicazione se visitato
+    let popupContent = `
+      <div class="custom-popup">
+        <div class="popup-header">${shop.name}</div>
+        <div class="popup-content">
+          <div>Categoria: ${shop.category}</div>
+          <div>ID: ${shop.id}</div>
+          ${isVisited ? '<div class="visited-badge">✅ Visitato!</div>' : ''}
         </div>
-      `);
+      </div>
+    `;
+    
+    const marker = L.marker([shop.lat, shop.lon], { icon: shopIcon })
+      .bindPopup(popupContent);
     
     marker.addTo(map);
     shopsMarkers.push(marker);
   });
 }
+
+
 
 function findClosestShop(position) {
   if (!allShops || allShops.length === 0) return null;
