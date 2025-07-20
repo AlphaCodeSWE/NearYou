@@ -760,15 +760,15 @@ function generateFallbackShopsInArea(area) {
 }
 
 function filterShopsByCategory() {
-  // Mappa completa filtri UI (italiano) → categorie database (inglese/Overpass)
+  // Mappa CORRETTA basata sui dati reali del database
   const categoryMapping = {
     "all": "all",
-    "ristorante": ["restaurant", "food", "cafe", "pizza", "italian", "fast_food", "pub"],
-    "bar": ["bar", "cafe", "pub", "coffee", "drinks", "beverages"],
-    "abbigliamento": ["clothes", "fashion", "boutique", "clothing", "shoes", "textile", "fabric"],
-    "supermercato": ["supermarket", "grocery", "convenience", "food", "market"],
-    "elettronica": ["electronics", "computer", "mobile_phone", "tech", "electrical"],
-    "farmacia": ["pharmacy", "chemist", "health", "medical"]
+    "ristorante": ["food", "frozen_food", "seafood", "health_food", "bakery", "pastry"],
+    "bar": ["convenience", "kiosk", "newsagent"], // Approssimazione - non ci sono bar nel DB
+    "abbigliamento": ["clothes", "shoes", "jewelry"],
+    "supermercato": ["supermarket", "convenience"],
+    "elettronica": ["electronics", "computer", "mobile_phone"], // Potrebbero non esserci
+    "farmacia": ["pharmacy", "chemist"] // Potrebbero non esserci
   };
   
   // Filter shops by selected category
@@ -782,7 +782,6 @@ function filterShopsByCategory() {
       
       const shopCategory = shop.category.toLowerCase().trim();
       
-      // Verifica se la categoria del negozio match con una delle categorie target
       return targetCategories.some(target => {
         return shopCategory === target || 
                shopCategory.includes(target) ||
@@ -790,9 +789,10 @@ function filterShopsByCategory() {
       });
     });
     
-    // Debug log
+    // Debug log con dati reali
     console.log(`Filtro "${categoryFilter}": trovati ${filteredShops.length}/${allShops.length} negozi`);
-    console.log('Categorie trovate:', [...new Set(filteredShops.map(s => s.category))]);
+    console.log('Categorie target:', targetCategories);
+    console.log('Categorie matchate:', [...new Set(filteredShops.map(s => s.category))]);
   }
   
   // Update shop markers on the map
