@@ -42,7 +42,7 @@ class QualityMetricsAnalyzer:
                 # Incrementa complessità per ogni costrutto decisionale
                 if isinstance(node, (ast.If, ast.While, ast.For, ast.AsyncFor)):
                     complexity += 1
-                elif isinstance(node, (ast.With, ast.AsyncWith)):  # FIX: Parentesi aggiunte per tupla
+                elif isinstance(node, (ast.With, ast.AsyncWith)):  # FIX: Parentesi per tupla
                     complexity += 1
                 elif isinstance(node, ast.Try):
                     complexity += 1
@@ -86,7 +86,7 @@ class QualityMetricsAnalyzer:
                     if int(num) > 1 and not re.search(rf'{num}.*#.*constant|#.*{num}', line_stripped.lower()):
                         smells.append({
                             'type': 'MAGIC_NUMBER',
-                            'file': file_path,
+                            'file': str(Path(file_path).name),  # FIX: Converti in stringa
                             'line': i,
                             'description': f'Numero magico rilevato: {num}'
                         })
@@ -95,7 +95,7 @@ class QualityMetricsAnalyzer:
                 if len(line.rstrip()) > 120:
                     smells.append({
                         'type': 'LONG_LINE',
-                        'file': file_path,
+                        'file': str(Path(file_path).name),  # FIX: Converti in stringa
                         'line': i,
                         'description': f'Linea troppo lunga: {len(line.rstrip())} caratteri'
                     })
@@ -104,7 +104,7 @@ class QualityMetricsAnalyzer:
                 if re.search(r'def\s+\w+\s*\([^)]*,[^)]*,[^)]*,[^)]*,[^)]*,[^)]*\)', line_stripped):
                     smells.append({
                         'type': 'TOO_MANY_PARAMS',
-                        'file': file_path,
+                        'file': str(Path(file_path).name),  # FIX: Converti in stringa
                         'line': i,
                         'description': 'Troppi parametri nella funzione'
                     })
@@ -113,16 +113,16 @@ class QualityMetricsAnalyzer:
                 if re.search(r'#.*(?:TODO|FIXME|XXX)', line_stripped, re.IGNORECASE):
                     smells.append({
                         'type': 'TODO_COMMENT',
-                        'file': file_path,
+                        'file': str(Path(file_path).name),  # FIX: Converti in stringa
                         'line': i,
                         'description': 'Commento TODO/FIXME rilevato'
                     })
                 
                 # Empty except blocks
-                if 'except:' in line_stripped and 'pass' in lines[i] if i < len(lines) else False:
+                if 'except:' in line_stripped and i < len(lines) and 'pass' in lines[i]:
                     smells.append({
                         'type': 'EMPTY_EXCEPT',
-                        'file': file_path,
+                        'file': str(Path(file_path).name),  # FIX: Converti in stringa
                         'line': i,
                         'description': 'Blocco except vuoto'
                     })
@@ -213,7 +213,7 @@ class QualityMetricsAnalyzer:
         
         for py_file in self.project_dir.rglob("*.py"):
             if self.should_analyze_file(py_file):
-                complexity = self.calculate_cyclomatic_complexity(py_file)
+                complexity = self.calculate_cyclomatic_complexity(str(py_file))  # FIX: Converti in stringa
                 if complexity > 0:
                     rel_path = py_file.relative_to(self.project_dir)
                     self.complexity_data[str(rel_path)] = complexity
@@ -228,7 +228,7 @@ class QualityMetricsAnalyzer:
         
         for py_file in self.project_dir.rglob("*.py"):
             if self.should_analyze_file(py_file):
-                smells = self.detect_code_smells(py_file)
+                smells = self.detect_code_smells(str(py_file))  # FIX: Converti in stringa
                 self.code_smells.extend(smells)
         
         self.metrics["code_smells"] = len(self.code_smells)
@@ -329,7 +329,7 @@ class QualityMetricsAnalyzer:
         for smell_type, smells in smells_by_type.items():
             report.append(f"📍 {smell_type} ({len(smells)} occorrenze):")
             for smell in smells[:5]:  # Solo prime 5
-                file_name = Path(smell['file']).name
+                file_name = smell['file']  # Già convertito in stringa
                 report.append(f"   🟢 {file_name}:{smell['line']} - {smell['description']}")
             report.append("")
         
@@ -384,11 +384,23 @@ class QualityMetricsAnalyzer:
         
         # Salva metriche JSON
         metrics_file = self.project_dir / "quality_metrics.json"
+        
+        # FIX: Assicurati che tutti i dati siano JSON serializable
+        json_safe_code_smells = []
+        for smell in self.code_smells[:50]:  # Limita per dimensione file
+            json_safe_smell = {
+                'type': smell['type'],
+                'file': str(smell['file']),  # Assicurati che sia stringa
+                'line': smell['line'],
+                'description': smell['description']
+            }
+            json_safe_code_smells.append(json_safe_smell)
+        
         full_data = {
             "timestamp": datetime.now().isoformat(),
             "metrics": self.metrics,
             "complexity_detail": self.complexity_data,
-            "code_smells": self.code_smells[:50]  # Limita per dimensione file
+            "code_smells": json_safe_code_smells
         }
         
         with open(metrics_file, 'w', encoding='utf-8') as f:
