@@ -19,7 +19,7 @@ echo "ClickHouse è pronto. Procedo con la creazione."
 echo "Creazione del database 'nearyou' (se non esiste già)..."
 docker exec -i clickhouse-server clickhouse-client --query "CREATE DATABASE IF NOT EXISTS nearyou;"
 
-# Creazione della tabella users
+# Creazione della tabella users con deduplicazione
 echo "Creazione della tabella users..."
 docker exec -i clickhouse-server clickhouse-client --query "
     USE nearyou;
@@ -38,8 +38,16 @@ docker exec -i clickhouse-server clickhouse-client --query "
         country           String,
         city              String,
         registration_time DateTime
-    ) ENGINE = MergeTree()
+    ) ENGINE = ReplacingMergeTree()
     ORDER BY user_id;
+"
+
+# Creazione tabella staging per filtraggio duplicati
+echo "Creazione della tabella temporanea users_staging..."
+docker exec -i clickhouse-server clickhouse-client --query "
+    USE nearyou;
+    CREATE TABLE IF NOT EXISTS users_staging AS users
+    ENGINE = Memory;
 "
 
 # Creazione della tabella user_events
@@ -140,3 +148,9 @@ docker exec -i clickhouse-server clickhouse-client --query "
 "
 
 echo "Inizializzazione di ClickHouse completata."
+
+echo ""
+echo "[!] Per inserire dati evitando duplicati su user_id:"
+echo "docker exec -i clickhouse-server clickhouse-client --query \"INSERT INTO nearyou.users SELECT DISTINCT * FROM nearyou.users_staging;\""
+echo "Poi svuota la staging table con:"
+echo "docker exec -i clickhouse-server clickhouse-client --query \"TRUNCATE TABLE nearyou.users_staging;\""

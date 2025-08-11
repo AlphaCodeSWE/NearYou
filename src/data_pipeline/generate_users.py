@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import random
 import time
+import argparse
 from datetime import datetime, date
 import logging
 
@@ -19,7 +20,7 @@ from src.configg import (
 setup_logging()
 logger = logging.getLogger(__name__)
 
-NUM_USERS = 5  # quanti utenti creare
+NUM_USERS = 5  # default quanti utenti creare
 
 # ——————————————————————————————————————————————————————————————
 # Elenchi verosimili
@@ -76,14 +77,74 @@ def calculate_age(birthdate: date) -> int:
     today = date.today()
     return today.year - birthdate.year - ((today.month, today.day) < (birthdate.month, birthdate.day))
 
-def generate_user_record(user_id: int) -> tuple:
-    # Nome e cognome verosimili
-    full_name = fake.name()
-    first, last = full_name.split(" ", 1)
-    # Username: first + last lowercase
-    username = (first + last).lower().replace("'", "").replace(" ", "")
-    # Email basata su username e dominio casuale
-    email = f"{username}@{random.choice(EMAIL_DOMAINS)}"
+def get_max_user_id() -> int:
+    """Ottiene il massimo user_id esistente nella tabella users."""
+    try:
+        result = client.execute("SELECT max(user_id) FROM users")
+        max_id = result[0][0] if result and result[0][0] is not None else 0
+        logger.info(f"Massimo user_id esistente: {max_id}")
+        return max_id
+    except CHError as e:
+        logger.warning(f"Errore nel recuperare max user_id (tabella potrebbe essere vuota): {e}")
+        return 0
+
+def check_existing_user_ids(start_id: int, end_id: int) -> set:
+    """Controlla quali user_id esistono già nel range specificato."""
+    try:
+        result = client.execute(
+            "SELECT user_id FROM users WHERE user_id >= %(start)s AND user_id <= %(end)s",
+            {"start": start_id, "end": end_id}
+        )
+        existing_ids = {row[0] for row in result}
+        if existing_ids:
+            logger.info(f"Trovati {len(existing_ids)} user_id esistenti nel range {start_id}-{end_id}")
+        return existing_ids
+    except CHError as e:
+        logger.warning(f"Errore nel controllare user_id esistenti: {e}")
+        return set()
+
+def check_existing_usernames_emails() -> tuple[set, set]:
+    """Controlla username e email già esistenti per evitare duplicati."""
+    try:
+        result = client.execute("SELECT username, email FROM users")
+        existing_usernames = {row[0] for row in result}
+        existing_emails = {row[1] for row in result}
+        logger.info(f"Trovati {len(existing_usernames)} username e {len(existing_emails)} email esistenti")
+        return existing_usernames, existing_emails
+    except CHError as e:
+        logger.warning(f"Errore nel controllare username/email esistenti: {e}")
+        return set(), set()
+
+def generate_unique_username_email(existing_usernames: set, existing_emails: set) -> tuple[str, str]:
+    """Genera username ed email unici."""
+    max_attempts = 100
+    
+    for attempt in range(max_attempts):
+        # Nome e cognome verosimili
+        full_name = fake.name()
+        first, last = full_name.split(" ", 1)
+        
+        # Username: first + last lowercase + numero se necessario
+        base_username = (first + last).lower().replace("'", "").replace(" ", "")
+        username = base_username
+        if username in existing_usernames:
+            username = f"{base_username}{random.randint(1, 9999)}"
+        
+        # Email basata su username e dominio casuale
+        email = f"{username}@{random.choice(EMAIL_DOMAINS)}"
+        
+        # Verifica unicità
+        if username not in existing_usernames and email not in existing_emails:
+            existing_usernames.add(username)  # Aggiorna per i prossimi utenti
+            existing_emails.add(email)
+            return username, email, full_name
+    
+    raise Exception(f"Impossibile generare username/email unici dopo {max_attempts} tentativi")
+
+def generate_user_record(user_id: int, existing_usernames: set, existing_emails: set) -> tuple:
+    # Genera username ed email unici
+    username, email, full_name = generate_unique_username_email(existing_usernames, existing_emails)
+    
     # Sesso e data di nascita Faker
     profile = fake.simple_profile()
     gender = "Male" if profile["sex"] == "M" else "Female"
@@ -125,7 +186,32 @@ def generate_user_record(user_id: int) -> tuple:
 
 def insert_users(num_users: int):
     logger.info("Generazione di %d utenti verosimili...", num_users)
-    records = [generate_user_record(i+1) for i in range(num_users)]
+    
+    # Ottieni il massimo user_id esistente per evitare conflitti
+    max_existing_id = get_max_user_id()
+    start_id = max_existing_id + 1
+    end_id = start_id + num_users - 1
+    
+    # Doppio controllo: verifica se alcuni ID nel range esistono già
+    existing_ids = check_existing_user_ids(start_id, end_id)
+    
+    # Ottieni username ed email esistenti per evitare duplicati
+    existing_usernames, existing_emails = check_existing_usernames_emails()
+    
+    # Genera gli utenti partendo dal primo ID sicuro
+    records = []
+    current_id = start_id
+    
+    for i in range(num_users):
+        # Salta gli ID che esistono già (failsafe)
+        while current_id in existing_ids:
+            current_id += 1
+            
+        records.append(generate_user_record(current_id, existing_usernames, existing_emails))
+        current_id += 1
+    
+    logger.info(f"Inserimento utenti con ID da {start_id} a {current_id-1}")
+    
     query = """
         INSERT INTO users (
             user_id, username, full_name, email, phone_number,
@@ -135,15 +221,31 @@ def insert_users(num_users: int):
     """
     try:
         client.execute(query, records)
-        logger.info("Inseriti %d utenti nella tabella 'users'.", num_users)
+        logger.info("Inseriti %d utenti nella tabella 'users'.", len(records))
+        logger.info(f"Range di user_id inseriti: {records[0][0]} - {records[-1][0]}")
     except CHError as e:
         logger.error("Errore inserimento utenti: %s", e)
+        raise
 
 if __name__ == '__main__':
-    # 1) Attendi che il DB e la tabella siano pronti
-    wait_for_clickhouse_database(client, CLICKHOUSE_DATABASE)
-    wait_for_table("users")
+    # Parsing argomenti da linea di comando
+    parser = argparse.ArgumentParser(description='Genera utenti verosimili per ClickHouse')
+    parser.add_argument('--num-users', '-n', type=int, default=NUM_USERS,
+                       help=f'Numero di utenti da generare (default: {NUM_USERS})')
+    parser.add_argument('--check-duplicates', action='store_true',
+                       help='Esegui controlli estesi per evitare duplicati')
+    args = parser.parse_args()
+    
+    try:
+        # 1) Attendi che il DB e la tabella siano pronti
+        wait_for_clickhouse_database(client, CLICKHOUSE_DATABASE)
+        wait_for_table("users")
 
-    # 2) Inserisci i profili
-    insert_users(NUM_USERS)
-    logger.info("Operazione completata con successo.")
+        # 2) Inserisci i profili
+        logger.info(f"Avvio generazione di {args.num_users} utenti...")
+        insert_users(args.num_users)
+        logger.info("Operazione completata con successo.")
+        
+    except Exception as e:
+        logger.error(f"Errore durante la generazione utenti: {e}")
+        exit(1)

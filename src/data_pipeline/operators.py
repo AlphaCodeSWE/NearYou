@@ -1,10 +1,11 @@
-"""Operatori custom per Bytewax dataflow."""
+"""Operatori custom per Bytewax dataflow con Observer Pattern e Singleton."""
 import asyncio
 import logging
 import random
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Dict, Any, Optional, Tuple, List, Protocol
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
+from abc import ABC, abstractmethod
 
 import asyncpg
 import httpx
@@ -36,16 +37,150 @@ VISIT_DURATION_RANGES = {
     'palestra': (45, 120),      # 45-120 minuti
 }
 
-class DatabaseConnections:
-    """Gestisce connessioni database con pattern singleton e pooling."""
+# Observer Pattern Implementation
+class Observer(ABC):
+    """Abstract observer for monitoring events."""
+    
+    @abstractmethod
+    def update(self, event_type: str, data: Dict[str, Any]) -> None:
+        """Update observer with new event."""
+        pass
+
+class Subject(ABC):
+    """Abstract subject that observers can subscribe to."""
     
     def __init__(self):
+        self._observers: List[Observer] = []
+    
+    def attach(self, observer: Observer) -> None:
+        """Attach an observer."""
+        if observer not in self._observers:
+            self._observers.append(observer)
+            logger.debug(f"Attached observer: {type(observer).__name__}")
+    
+    def detach(self, observer: Observer) -> None:
+        """Detach an observer."""
+        if observer in self._observers:
+            self._observers.remove(observer)
+            logger.debug(f"Detached observer: {type(observer).__name__}")
+    
+    def notify(self, event_type: str, data: Dict[str, Any]) -> None:
+        """Notify all observers."""
+        for observer in self._observers:
+            try:
+                observer.update(event_type, data)
+            except Exception as e:
+                logger.error(f"Error notifying observer {type(observer).__name__}: {e}")
+
+class MetricsObserver(Observer):
+    """Observer for collecting metrics."""
+    
+    def __init__(self):
+        self.metrics = {
+            "events_processed": 0,
+            "messages_generated": 0,
+            "visits_simulated": 0,
+            "errors": 0,
+            "shops_found": 0,
+            "cache_hits": 0,
+            "cache_misses": 0
+        }
+    
+    def update(self, event_type: str, data: Dict[str, Any]) -> None:
+        """Update metrics based on event."""
+        if event_type == "event_processed":
+            self.metrics["events_processed"] += 1
+        elif event_type == "message_generated":
+            self.metrics["messages_generated"] += 1
+        elif event_type == "visit_simulated":
+            self.metrics["visits_simulated"] += 1
+        elif event_type == "error":
+            self.metrics["errors"] += 1
+        elif event_type == "shop_found":
+            self.metrics["shops_found"] += 1
+        elif event_type == "cache_hit":
+            self.metrics["cache_hits"] += 1
+        elif event_type == "cache_miss":
+            self.metrics["cache_misses"] += 1
+        
+        # Log every 100 events
+        if self.metrics["events_processed"] % 100 == 0:
+            logger.info(f"Metrics: {self.metrics}")
+    
+    def get_metrics(self) -> Dict[str, int]:
+        """Get current metrics."""
+        return self.metrics.copy()
+    
+    def reset_metrics(self) -> None:
+        """Reset all metrics."""
+        for key in self.metrics:
+            self.metrics[key] = 0
+
+class PerformanceObserver(Observer):
+    """Observer for performance monitoring."""
+    
+    def __init__(self):
+        self.processing_times: List[float] = []
+        self.start_times: Dict[str, float] = {}
+    
+    def update(self, event_type: str, data: Dict[str, Any]) -> None:
+        """Update performance metrics."""
+        if event_type == "processing_start":
+            event_id = data.get("event_id", "unknown")
+            self.start_times[event_id] = datetime.now().timestamp()
+        elif event_type == "processing_end":
+            event_id = data.get("event_id", "unknown")
+            if event_id in self.start_times:
+                duration = datetime.now().timestamp() - self.start_times[event_id]
+                self.processing_times.append(duration)
+                del self.start_times[event_id]
+                
+                # Keep only last 1000 measurements
+                if len(self.processing_times) > 1000:
+                    self.processing_times = self.processing_times[-1000:]
+    
+    def get_avg_processing_time(self) -> float:
+        """Get average processing time."""
+        if not self.processing_times:
+            return 0.0
+        return sum(self.processing_times) / len(self.processing_times)
+    
+    def get_latest_processing_times(self, count: int = 10) -> List[float]:
+        """Get latest processing times."""
+        return self.processing_times[-count:]
+
+class DatabaseConnections(Subject):
+    """Gestisce connessioni database con pattern singleton, pooling e Observer."""
+    
+    _instance: Optional['DatabaseConnections'] = None
+    
+    def __new__(cls) -> 'DatabaseConnections':
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+    
+    def __init__(self):
+        if self._initialized:
+            return
+        
+        super().__init__()  # Initialize Subject
+        
         self._pg_pool = None
         self._ch_client = None
         self._http_client = None
         self._loop = None
         self._message_cache = {}  # Cache semplice in-memory
+        self._initialized = True
         
+        # Initialize observers
+        self._metrics_observer = MetricsObserver()
+        self._performance_observer = PerformanceObserver()
+        self.attach(self._metrics_observer)
+        self.attach(self._performance_observer)
+        
+        logger.info("DatabaseConnections singleton initialized with observers")
+    
     @property
     def loop(self):
         """Get or create event loop."""
@@ -67,6 +202,7 @@ class DatabaseConnections:
                 min_size=2, max_size=10,
                 command_timeout=10
             )
+            logger.info("PostgreSQL pool initialized")
         return self._pg_pool
         
     def get_ch_client(self) -> CHClient:
@@ -78,24 +214,56 @@ class DatabaseConnections:
                 database=CLICKHOUSE_DATABASE,
                 send_receive_timeout=10
             )
+            logger.info("ClickHouse client initialized")
         return self._ch_client
         
     async def get_http_client(self) -> httpx.AsyncClient:
         """Ottieni client HTTP (lazy init)."""
         if self._http_client is None:
             self._http_client = httpx.AsyncClient(timeout=10.0)
+            logger.info("HTTP client initialized")
         return self._http_client
         
     def get_cache_key(self, user_id: int, shop_id: int) -> str:
         """Genera chiave cache per messaggi."""
         return f"{user_id}:{shop_id}"
+    
+    def get_cached_message(self, user_id: int, shop_id: int) -> Optional[str]:
+        """Get cached message and notify observers."""
+        cache_key = self.get_cache_key(user_id, shop_id)
+        if cache_key in self._message_cache:
+            self.notify("cache_hit", {"user_id": user_id, "shop_id": shop_id})
+            return self._message_cache[cache_key]
+        else:
+            self.notify("cache_miss", {"user_id": user_id, "shop_id": shop_id})
+            return None
+    
+    def cache_message(self, user_id: int, shop_id: int, message: str) -> None:
+        """Cache message."""
+        cache_key = self.get_cache_key(user_id, shop_id)
+        self._message_cache[cache_key] = message
+    
+    def get_metrics(self) -> Dict[str, Any]:
+        """Get current metrics from observers."""
+        return {
+            "metrics": self._metrics_observer.get_metrics(),
+            "avg_processing_time": self._performance_observer.get_avg_processing_time(),
+            "latest_processing_times": self._performance_observer.get_latest_processing_times()
+        }
         
     async def close(self):
         """Chiudi tutte le connessioni."""
         if self._pg_pool:
             await self._pg_pool.close()
+            logger.info("PostgreSQL pool closed")
         if self._http_client:
             await self._http_client.aclose()
+            logger.info("HTTP client closed")
+
+# Get singleton instance
+def get_db_connections() -> DatabaseConnections:
+    """Get the singleton DatabaseConnections instance."""
+    return DatabaseConnections()
 
 # Funzioni helper asincrone
 async def _find_nearest_shop(conn: DatabaseConnections, lat: float, lon: float) -> Optional[Dict[str, Any]]:
@@ -120,15 +288,18 @@ async def _find_nearest_shop(conn: DatabaseConnections, lat: float, lon: float) 
         )
         
         if row:
-            return {
+            shop_data = {
                 "shop_id": row["shop_id"],
                 "shop_name": row["shop_name"],
                 "category": row["category"],
                 "distance": row["distance"]
             }
+            conn.notify("shop_found", shop_data)
+            return shop_data
         return None
     except Exception as e:
         logger.error(f"Errore query PostGIS: {e}")
+        conn.notify("error", {"error": str(e), "function": "_find_nearest_shop"})
         return None
 
 async def _get_user_profile(conn: DatabaseConnections, user_id: int) -> Optional[Dict[str, Any]]:
@@ -154,16 +325,17 @@ async def _get_user_profile(conn: DatabaseConnections, user_id: int) -> Optional
         return None
     except Exception as e:
         logger.error(f"Errore recupero profilo utente {user_id}: {e}")
+        conn.notify("error", {"error": str(e), "function": "_get_user_profile", "user_id": user_id})
         return None
 
 async def _generate_message(conn: DatabaseConnections, user: Dict, shop: Dict) -> str:
     """Genera messaggio personalizzato via API."""
     try:
-        # Check cache
-        cache_key = conn.get_cache_key(user["user_id"], shop["shop_id"])
-        if cache_key in conn._message_cache:
-            logger.debug(f"Cache hit per {cache_key}")
-            return conn._message_cache[cache_key]
+        # Check cache first
+        cached_message = conn.get_cached_message(user["user_id"], shop["shop_id"])
+        if cached_message:
+            logger.debug(f"Cache hit per user {user['user_id']}, shop {shop['shop_id']}")
+            return cached_message
             
         # Call API
         client = await conn.get_http_client()
@@ -196,13 +368,16 @@ async def _generate_message(conn: DatabaseConnections, user: Dict, shop: Dict) -
             message = re.sub(r'\[.*?\]', shop["shop_name"], message)
             
             # Cache result
-            conn._message_cache[cache_key] = message
+            conn.cache_message(user["user_id"], shop["shop_id"], message)
+            conn.notify("message_generated", {"user_id": user["user_id"], "shop_id": shop["shop_id"]})
             return message
         else:
             logger.error(f"Errore API: {response.status_code}")
+            conn.notify("error", {"error": f"API error: {response.status_code}", "function": "_generate_message"})
             return ""
     except Exception as e:
         logger.error(f"Errore generazione messaggio: {e}")
+        conn.notify("error", {"error": str(e), "function": "_generate_message"})
         return ""
 
 def _should_simulate_visit(user: Dict, shop: Dict, message: str) -> bool:
@@ -324,16 +499,28 @@ def _create_simulated_visit(conn: DatabaseConnections, user: Dict, shop: Dict) -
             ) VALUES
         """, [visit_data])
         
+        conn.notify("visit_simulated", {
+            "user_id": user["user_id"],
+            "shop_id": shop["shop_id"],
+            "duration_minutes": duration_minutes,
+            "estimated_spending": estimated_spending
+        })
+        
         logger.info(f"📍 Visita simulata: User {user['user_id']} → {shop['shop_name']} "
                    f"({duration_minutes}min, €{estimated_spending:.1f})")
         
     except Exception as e:
         logger.error(f"Errore creazione visita simulata: {e}")
+        conn.notify("error", {"error": str(e), "function": "_create_simulated_visit"})
 
 # Operatori Bytewax
-def enrich_with_nearest_shop(item: Tuple[str, Dict], conn: DatabaseConnections) -> List[Tuple[str, Dict]]:
+def enrich_with_nearest_shop(item: Tuple[str, Dict]) -> List[Tuple[str, Dict]]:
     """Arricchisce evento con negozio più vicino."""
     key, event = item
+    conn = get_db_connections()
+    
+    # Notify processing start
+    conn.notify("processing_start", {"event_id": key})
     
     # Esegui query asincrona in modo sincrono
     loop = conn.loop
@@ -344,20 +531,31 @@ def enrich_with_nearest_shop(item: Tuple[str, Dict], conn: DatabaseConnections) 
     if shop:
         # Merge shop data into event
         event.update(shop)
-        return [(key, event)]
+        result = [(key, event)]
     else:
         logger.warning(f"Nessun negozio trovato per user {key}")
-        return []
+        result = []
+    
+    # Notify processing end
+    conn.notify("processing_end", {"event_id": key})
+    conn.notify("event_processed", {"user_id": key})
+    
+    return result
 
-def check_proximity_and_generate_message(item: Tuple[str, Dict], conn: DatabaseConnections) -> List[Tuple[str, Dict]]:
+def check_proximity_and_generate_message(item: Tuple[str, Dict]) -> List[Tuple[str, Dict]]:
     """Genera messaggio se utente è in prossimità."""
     key, event = item
+    conn = get_db_connections()
+    
+    # Notify processing start
+    conn.notify("processing_start", {"event_id": f"{key}_message"})
     
     # Check distanza
     distance = event.get("distance", float('inf'))
     if distance > MAX_POI_DISTANCE:
         # Troppo lontano, passa evento senza messaggio
         event["poi_info"] = ""
+        conn.notify("processing_end", {"event_id": f"{key}_message"})
         return [(key, event)]
     
     # Recupera profilo e genera messaggio
@@ -386,12 +584,18 @@ def check_proximity_and_generate_message(item: Tuple[str, Dict], conn: DatabaseC
     else:
         event["poi_info"] = ""
         event["visited_shop"] = False
-        
+    
+    # Notify processing end
+    conn.notify("processing_end", {"event_id": f"{key}_message"})
     return [(key, event)]
 
-def write_to_clickhouse(item: Tuple[str, Dict], conn: DatabaseConnections) -> None:
+def write_to_clickhouse(item: Tuple[str, Dict]) -> None:
     """Scrive evento in ClickHouse."""
     key, event = item
+    conn = get_db_connections()
+    
+    # Notify processing start
+    conn.notify("processing_start", {"event_id": f"{key}_write"})
     
     try:
         ch = conn.get_ch_client()
@@ -423,5 +627,10 @@ def write_to_clickhouse(item: Tuple[str, Dict], conn: DatabaseConnections) -> No
             logger.info(f"💬 Evento con messaggio salvato per user {key}")
         if event.get("visited_shop"):
             logger.info(f"🏪 Visita simulata registrata per user {key}")
+            
     except Exception as e:
         logger.error(f"Errore scrittura ClickHouse: {e}")
+        conn.notify("error", {"error": str(e), "function": "write_to_clickhouse"})
+    
+    # Notify processing end
+    conn.notify("processing_end", {"event_id": f"{key}_write"})

@@ -17,7 +17,6 @@ from src.configg import (
     SSL_CAFILE, SSL_CERTFILE, SSL_KEYFILE,
 )
 from .operators import (
-    DatabaseConnections,
     enrich_with_nearest_shop,
     check_proximity_and_generate_message,
     write_to_clickhouse
@@ -103,9 +102,6 @@ def build_dataflow() -> Dataflow:
     """Costruisce il dataflow Bytewax."""
     flow = Dataflow("nearyou_consumer")
     
-    # Inizializza connessioni database (singleton pattern)
-    db_conn = DatabaseConnections()
-    
     # 1. Input: leggi da Kafka
     # CORREZIONE: Configurazione separata per consumer (non producer)
     kafka_config = {
@@ -139,15 +135,15 @@ def build_dataflow() -> Dataflow:
     
     # 4. Arricchisci con negozio più vicino (async operation)
     enriched = op.flat_map("enrich_shop", valid_messages,
-                          lambda x: enrich_with_nearest_shop(x, db_conn))
+                          enrich_with_nearest_shop)
     
     # 5. Genera messaggio se in prossimità (con cache)
     with_messages = op.flat_map("generate_msg", enriched,
-                               lambda x: check_proximity_and_generate_message(x, db_conn))
+                               check_proximity_and_generate_message)
     
     # 6. Scrivi su ClickHouse (side effect)
     op.inspect("write_clickhouse", with_messages,
-               lambda step_id, x: write_to_clickhouse(x, db_conn))
+               lambda step_id, x: write_to_clickhouse(x))
     
     # 7. Log finale per debugging
     op.inspect("log_processed", with_messages,

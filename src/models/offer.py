@@ -1,10 +1,11 @@
 """
-Modelli dati per le offerte e relativi utility.
+Modelli dati per le offerte e relativi utility con Builder Pattern.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, date
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Protocol
 from enum import Enum
+from abc import ABC, abstractmethod
 
 class OfferType(Enum):
     """Tipi di offerta disponibili."""
@@ -12,24 +13,45 @@ class OfferType(Enum):
     FIXED_AMOUNT = "fixed_amount"
     BUY_ONE_GET_ONE = "buy_one_get_one"
 
+class OfferValidatorProtocol(Protocol):
+    """Protocol for offer validation."""
+    
+    def validate(self, offer: 'Offer') -> bool:
+        """Validate an offer."""
+        ...
+
+class OfferValidator:
+    """Default offer validator implementation."""
+    
+    def validate(self, offer: 'Offer') -> bool:
+        """Validate offer basic constraints."""
+        if offer.discount_percent < 0 or offer.discount_percent > 100:
+            return False
+        if offer.valid_from and offer.valid_until and offer.valid_from > offer.valid_until:
+            return False
+        if offer.min_age and offer.max_age and offer.min_age > offer.max_age:
+            return False
+        return True
+
 @dataclass
 class Offer:
-    """Modello dati per un'offerta."""
+    """Modello dati per un'offerta con validazione integrata."""
     offer_id: Optional[int] = None
     shop_id: int = 0
     discount_percent: int = 0
     description: str = ""
     offer_type: str = OfferType.PERCENTAGE.value
-    valid_from: date = None
-    valid_until: date = None
+    valid_from: Optional[date] = None
+    valid_until: Optional[date] = None
     is_active: bool = True
     max_uses: Optional[int] = None
     current_uses: int = 0
     min_age: Optional[int] = None
     max_age: Optional[int] = None
-    target_categories: Optional[List[str]] = None
+    target_categories: Optional[List[str]] = field(default_factory=list)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    _validator: OfferValidatorProtocol = field(default_factory=OfferValidator, init=False)
     
     def __post_init__(self):
         """Post-inizializzazione per impostare valori di default."""
@@ -37,6 +59,14 @@ class Offer:
             self.valid_from = date.today()
         if self.target_categories is None:
             self.target_categories = []
+    
+    def set_validator(self, validator: OfferValidatorProtocol) -> None:
+        """Set custom validator (Strategy pattern for validation)."""
+        self._validator = validator
+    
+    def is_valid(self) -> bool:
+        """Check if offer is valid using current validator."""
+        return self._validator.validate(self)
     
     def to_dict(self) -> Dict[str, Any]:
         """Converte l'offerta in dictionary per inserimento DB."""
@@ -93,7 +123,9 @@ class Offer:
         
         # Controllo date
         today = date.today()
-        if today < self.valid_from or today > self.valid_until:
+        if self.valid_from and today < self.valid_from:
+            return False
+        if self.valid_until and today > self.valid_until:
             return False
         
         # Controllo usi massimi
@@ -112,6 +144,149 @@ class Offer:
             return f"Compra 1 e prendi 2 da {shop_name}!" if shop_name else "Compra 1 e prendi 2!"
         else:
             return self.description or f"Offerta speciale da {shop_name}!" if shop_name else "Offerta speciale!"
+
+class OfferBuilder:
+    """
+    Builder pattern implementation for creating Offer objects.
+    Provides a fluent interface for constructing complex offers.
+    """
+    
+    def __init__(self):
+        self.reset()
+    
+    def reset(self) -> 'OfferBuilder':
+        """Reset builder to initial state."""
+        self._offer = Offer()
+        return self
+    
+    def shop(self, shop_id: int) -> 'OfferBuilder':
+        """Set shop ID."""
+        self._offer.shop_id = shop_id
+        return self
+    
+    def discount(self, percentage: int) -> 'OfferBuilder':
+        """Set discount percentage."""
+        self._offer.discount_percent = percentage
+        return self
+    
+    def description(self, text: str) -> 'OfferBuilder':
+        """Set offer description."""
+        self._offer.description = text
+        return self
+    
+    def offer_type(self, offer_type: OfferType) -> 'OfferBuilder':
+        """Set offer type."""
+        self._offer.offer_type = offer_type.value
+        return self
+    
+    def valid_period(self, from_date: date, until_date: date) -> 'OfferBuilder':
+        """Set validity period."""
+        self._offer.valid_from = from_date
+        self._offer.valid_until = until_date
+        return self
+    
+    def valid_for_days(self, days: int) -> 'OfferBuilder':
+        """Set validity for a number of days from today."""
+        from datetime import timedelta
+        self._offer.valid_from = date.today()
+        self._offer.valid_until = date.today() + timedelta(days=days)
+        return self
+    
+    def max_uses(self, uses: int) -> 'OfferBuilder':
+        """Set maximum number of uses."""
+        self._offer.max_uses = uses
+        return self
+    
+    def age_target(self, min_age: Optional[int] = None, max_age: Optional[int] = None) -> 'OfferBuilder':
+        """Set age targeting."""
+        self._offer.min_age = min_age
+        self._offer.max_age = max_age
+        return self
+    
+    def interest_target(self, categories: List[str]) -> 'OfferBuilder':
+        """Set interest targeting."""
+        self._offer.target_categories = categories.copy()
+        return self
+    
+    def active(self, is_active: bool = True) -> 'OfferBuilder':
+        """Set active status."""
+        self._offer.is_active = is_active
+        return self
+    
+    def build(self) -> Offer:
+        """Build and return the final Offer object."""
+        if not self._offer.is_valid():
+            raise ValueError("Cannot build invalid offer. Check constraints.")
+        
+        result = self._offer
+        self.reset()  # Reset for next use
+        return result
+    
+    def build_unsafe(self) -> Offer:
+        """Build without validation (for special cases)."""
+        result = self._offer
+        self.reset()
+        return result
+
+class OfferFactory:
+    """Factory for creating common offer types."""
+    
+    @staticmethod
+    def create_flash_offer(shop_id: int, shop_name: str, discount: int, hours: int = 24) -> Offer:
+        """Create a flash offer with short duration."""
+        return (OfferBuilder()
+                .shop(shop_id)
+                .discount(discount)
+                .description(f"🔥 OFFERTA FLASH: {discount}% di sconto da {shop_name}!")
+                .valid_for_days(max(1, hours // 24))
+                .max_uses(50)
+                .build())
+    
+    @staticmethod
+    def create_student_offer(shop_id: int, shop_name: str, discount: int = 15) -> Offer:
+        """Create a student-targeted offer."""
+        return (OfferBuilder()
+                .shop(shop_id)
+                .discount(discount)
+                .description(f"📚 Sconto studenti: {discount}% da {shop_name}!")
+                .age_target(min_age=16, max_age=30)
+                .interest_target(["studio", "libri", "università"])
+                .valid_for_days(30)
+                .max_uses(100)
+                .build())
+    
+    @staticmethod
+    def create_senior_offer(shop_id: int, shop_name: str, discount: int = 20) -> Offer:
+        """Create a senior-targeted offer."""
+        return (OfferBuilder()
+                .shop(shop_id)
+                .discount(discount)
+                .description(f"👴 Sconto senior: {discount}% da {shop_name}!")
+                .age_target(min_age=65)
+                .valid_for_days(60)
+                .max_uses(200)
+                .build())
+    
+    @staticmethod
+    def create_category_offer(shop_id: int, shop_name: str, category: str, discount: int = 25) -> Offer:
+        """Create a category-specific offer."""
+        category_interests = {
+            "ristorante": ["cucina", "cibo", "gastronomia"],
+            "bar": ["caffè", "aperitivo", "socializing"],
+            "abbigliamento": ["moda", "style", "shopping"],
+            "palestra": ["fitness", "sport", "allenamento"]
+        }
+        
+        interests = category_interests.get(category.lower(), [category])
+        
+        return (OfferBuilder()
+                .shop(shop_id)
+                .discount(discount)
+                .description(f"🎯 Offerta {category}: {discount}% da {shop_name}!")
+                .interest_target(interests)
+                .valid_for_days(21)
+                .max_uses(150)
+                .build())
 
 @dataclass 
 class UserVisit:
