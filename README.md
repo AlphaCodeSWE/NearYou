@@ -20,7 +20,72 @@ NearYou utilizza un'architettura a microservizi:
 - **Storage**: ClickHouse per analytics, PostgreSQL/PostGIS per dati geospaziali
 - **Cache**: Redis per memorizzare risposte LLM e migliorare performance
 
+## Installation
+
+### Prerequisites
+- Docker & Docker Compose
+- Python 3.10+
+- Node.js 16+ (for frontend development)
+
+### Quick Start
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/AlphaCodeSWE/NearYou.git
+   cd NearYou
+   ```
+
+2. **Setup environment**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your configuration
+   ```
+
+3. **Start all services**
+   ```bash
+   make up
+   # or
+   docker-compose up -d
+   ```
+
+4. **Access the application**
+   - Dashboard: http://localhost:8080
+   - Grafana: http://localhost:3000
+   - API: http://localhost:8000
+
 [Documentazione architetturale dettagliata](docs/architecture/overview.md)
+
+## Usage
+
+### Basic Operations
+
+**Start the system:**
+```bash
+docker-compose up -d
+```
+
+**Monitor services:**
+```bash
+docker-compose ps
+docker-compose logs -f
+```
+
+**Stop the system:**
+```bash
+docker-compose down
+```
+
+### API Usage
+
+Access the REST APIs:
+- User Dashboard: `http://localhost:8003`
+- Message Generator: `http://localhost:8001/health`
+- Monitoring: `http://localhost:3000`
+
+Example API call:
+```bash
+curl http://localhost:8001/health
+```
 
 ## Installazione e Setup
 

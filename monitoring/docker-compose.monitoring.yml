@@ -5,7 +5,7 @@ services:
     image: prom/prometheus:v2.45.0
     container_name: prometheus
     volumes:
-      - /workspace/NearYou/monitoring/prometheus:/etc/prometheus
+      - /Users/alessandrodipasquale/Desktop/NearYou/monitoring/prometheus:/etc/prometheus
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -28,7 +28,7 @@ services:
     image: grafana/loki:2.9.1
     container_name: loki
     volumes:
-      - /workspace/NearYou/monitoring/loki/loki.yml:/etc/loki/local-config.yaml
+      - /Users/alessandrodipasquale/Desktop/NearYou/monitoring/loki/loki.yml:/etc/loki/local-config.yaml
       - loki_data:/loki
     ports:
       - "3100:3100"
@@ -45,7 +45,7 @@ services:
     image: grafana/promtail:2.9.1
     container_name: promtail
     volumes:
-      - /workspace/NearYou/monitoring/loki/promtail.yml:/etc/promtail/config.yml
+      - /Users/alessandrodipasquale/Desktop/NearYou/monitoring/loki/promtail.yml:/etc/promtail/config.yml
       - /var/log:/var/log
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
     command: -config.file=/etc/promtail/config.yml

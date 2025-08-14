@@ -90,17 +90,17 @@ services:
       timeout: 10s
       retries: 3
 
-  nifi:
-    image: apache/nifi:latest
-    environment:
-      - NIFI_WEB_HTTP_PORT=8081
-    ports:
-      - "8081:8081"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/nifi"]
-      interval: 15s
-      timeout: 10s
-      retries: 3
+  # nifi:
+  #   image: apache/nifi:latest
+  #   environment:
+  #     - NIFI_WEB_HTTP_PORT=8081
+  #   ports:
+  #     - "8081:8081"
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8081/nifi"]
+  #     interval: 15s
+  #     timeout: 10s
+  #     retries: 3
 
  
   clickhouse:

@@ -1,0 +1,31 @@
+# Test Requirements
+# Core testing framework
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
+pytest-mock>=3.10.0
+
+# Test utilities
+mock>=4.0.0
+faker>=18.0.0
+factory-boy>=3.2.0
+
+# HTTP testing
+httpx>=0.24.0
+requests-mock>=1.10.0
+
+# Database testing  
+pytest-postgresql>=4.1.0
+pytest-redis>=3.0.0
+
+# Web testing
+selenium>=4.8.0
+pytest-playwright>=0.3.0
+
+# Performance testing
+pytest-benchmark>=4.0.0
+locust>=2.14.0
+
+# Additional utilities
+freezegun>=1.2.0
+responses>=0.23.0
