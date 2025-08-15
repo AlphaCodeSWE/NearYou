@@ -37,129 +37,6 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 0,
-        "y": 0
-      },
-      "id": 1,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.3",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "ClickHouse"
-          },
-          "format": 1,
-          "queryType": "sql",
-          "rawSql": "SELECT COUNT(*) as total_events FROM nearyou.user_events WHERE event_time >= now() - INTERVAL 1 DAY",
-          "refId": "A"
-        }
-      ],
-      "title": "Eventi Oggi",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "PostgreSQL"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 6,
-        "y": 0
-      },
-      "id": 2,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.3",
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "PostgreSQL"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawQuery": true,
-          "rawSql": "SELECT COUNT(*) FROM shops",
-          "refId": "A"
-        }
-      ],
-      "title": "Negozi Totali",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "ClickHouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
                 "color": "red",
                 "value": null
               },
@@ -626,7 +503,7 @@
           },
           "format": 1,
           "queryType": "sql",
-          "rawSql": "SELECT\n    toDateTime(concat('2024-01-01 ', toString(hour_of_day), ':00:00')) as time,\n    hour_of_day,\n    COUNT(*) as visite,\n    ROUND(SUM(estimated_spending), 2) as revenue\nFROM nearyou.user_visits\nWHERE visit_start_time >= now() - INTERVAL 7 DAY\nGROUP BY hour_of_day\nORDER BY hour_of_day",
+          "rawSql": "SELECT\n    toDateTime(concat('2024-01-01 ', lpad(toString(hour_of_day), 2, '0'), ':00:00')) as time,\n    hour_of_day,\n    COUNT(*) as visite,\n    ROUND(SUM(estimated_spending), 2) as revenue\nFROM nearyou.user_visits\nWHERE visit_start_time >= now() - INTERVAL 7 DAY\nGROUP BY hour_of_day\nORDER BY hour_of_day",
           "refId": "A"
         }
       ],
@@ -851,54 +728,6 @@
       ],
       "title": "Heatmap Geografica Revenue",
       "type": "geomap"
-    },
-    {
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "ClickHouse"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {"mode": "thresholds"},
-          "custom": {
-            "align": "auto",
-            "displayMode": "auto",
-            "inspect": false,
-            "filterable": true
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [{"color": "green", "value": null}]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 32
-      },
-      "id": 12,
-      "options": {
-        "footer": {"enablePagination": true},
-        "showHeader": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "ClickHouse"
-          },
-          "format": 1,
-          "queryType": "sql",
-          "rawSql": "SELECT user_id, username, full_name, email, phone_number, password, user_type, gender, age, profession, interests, country, city, registration_time FROM nearyou.users",
-          "refId": "A"
-        }
-      ],
-      "title": "Lista Utenti Completa",
-      "type": "table"
     }
   ],
   "refresh": "5s",
@@ -1014,7 +843,7 @@
     ]
   },
   "timezone": "",
-  "title": "NearYou - Dashboard Analytics Avanzata",
+  "title": "NearYou - Dashboard Business",
   "uid": "nearyou-dashboard-analytics-v1",
   "version": 1,
   "weekStart": ""
